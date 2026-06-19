@@ -8,7 +8,8 @@ public class UserServiceTests
     public async Task CreateAsync_WhenRequestIsInvalid_ReturnsValidationError()
     {
         var repository = new FakeUserRepository();
-        var service = new UserService(repository);
+        var passwordHasher = new FakeUserPasswordHasher();
+        var service = new UserService(repository, passwordHasher);
         var request = ValidCreateRequest() with { FirstName = "" };
 
         var result = await service.CreateAsync(request);
@@ -23,7 +24,8 @@ public class UserServiceTests
     public async Task CreateAsync_WhenEmailAlreadyExists_ReturnsConflict()
     {
         var repository = new FakeUserRepository { ExistsByEmailResult = true };
-        var service = new UserService(repository);
+        var passwordHasher = new FakeUserPasswordHasher();
+        var service = new UserService(repository, passwordHasher);
         var request = ValidCreateRequest(email: "  MARIO.ROSSI@example.com ");
 
         var result = await service.CreateAsync(request);
@@ -38,7 +40,8 @@ public class UserServiceTests
     public async Task CreateAsync_WhenRequestIsValid_PersistsUserAndReturnsMappedResponse()
     {
         var repository = new FakeUserRepository();
-        var service = new UserService(repository);
+        var passwordHasher = new FakeUserPasswordHasher();
+        var service = new UserService(repository, passwordHasher);
         var request = ValidCreateRequest(email: "  MARIO.ROSSI@example.com ");
 
         var result = await service.CreateAsync(request);
@@ -50,13 +53,15 @@ public class UserServiceTests
         Assert.Equal(1, repository.AddCallCount);
         Assert.Equal(1, repository.SaveChangesCallCount);
         Assert.NotNull(repository.LastAddedUser);
+        Assert.Equal("hashed::Password!123", repository.LastAddedUser!.PasswordHash);
+        Assert.Equal("Password!123", passwordHasher.LastHashedPassword);
     }
 
     [Fact]
     public async Task GetByIdAsync_WhenUserDoesNotExist_ReturnsNotFound()
     {
         var repository = new FakeUserRepository();
-        var service = new UserService(repository);
+        var service = CreateUserService(repository);
 
         var result = await service.GetByIdAsync(Guid.NewGuid());
 
@@ -68,7 +73,7 @@ public class UserServiceTests
     {
         var existing = CreateUser(firstName: "Anna", lastName: "Bianchi", email: "anna@example.com");
         var repository = new FakeUserRepository { GetByIdResult = existing };
-        var service = new UserService(repository);
+        var service = CreateUserService(repository);
 
         var result = await service.GetByIdAsync(existing.Id);
 
@@ -86,7 +91,7 @@ public class UserServiceTests
         {
             ListHandler = (page, pageSize) => new PagedResult<User>([user], 1)
         };
-        var service = new UserService(repository);
+        var service = CreateUserService(repository);
 
         var result = await service.ListAsync(page: 0, pageSize: 999);
 
@@ -102,7 +107,7 @@ public class UserServiceTests
     public async Task UpdateAsync_WhenRequestIsInvalid_ReturnsValidationError()
     {
         var repository = new FakeUserRepository();
-        var service = new UserService(repository);
+        var service = CreateUserService(repository);
         var request = ValidUpdateRequest() with { Email = "" };
 
         var result = await service.UpdateAsync(Guid.NewGuid(), request);
@@ -116,7 +121,7 @@ public class UserServiceTests
     public async Task UpdateAsync_WhenUserDoesNotExist_ReturnsNotFound()
     {
         var repository = new FakeUserRepository();
-        var service = new UserService(repository);
+        var service = CreateUserService(repository);
 
         var result = await service.UpdateAsync(Guid.NewGuid(), ValidUpdateRequest());
 
@@ -132,7 +137,7 @@ public class UserServiceTests
             GetByIdResult = existing,
             ExistsByEmailResult = true
         };
-        var service = new UserService(repository);
+        var service = CreateUserService(repository);
         var request = ValidUpdateRequest(email: "  DUPLICATE@example.com ");
 
         var result = await service.UpdateAsync(existing.Id, request);
@@ -148,7 +153,7 @@ public class UserServiceTests
     {
         var existing = CreateUser(firstName: "Mario", lastName: "Rossi", email: "mario@old.com");
         var repository = new FakeUserRepository { GetByIdResult = existing };
-        var service = new UserService(repository);
+        var service = CreateUserService(repository);
         var request = ValidUpdateRequest(
             firstName: "Giuseppe",
             lastName: "Verdi",
@@ -165,10 +170,27 @@ public class UserServiceTests
     }
 
     [Fact]
+    public async Task UpdateAsync_WhenNewPasswordIsProvided_HashesAndStoresIt()
+    {
+        var existing = CreateUser(firstName: "Mario", lastName: "Rossi", email: "mario@old.com");
+        var repository = new FakeUserRepository { GetByIdResult = existing };
+        var passwordHasher = new FakeUserPasswordHasher();
+        var service = new UserService(repository, passwordHasher);
+        var request = ValidUpdateRequest() with { NewPassword = "NewPassword!123" };
+
+        var result = await service.UpdateAsync(existing.Id, request);
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.Equal("NewPassword!123", passwordHasher.LastHashedPassword);
+        Assert.Equal("hashed::NewPassword!123", existing.PasswordHash);
+        Assert.Equal(1, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
     public async Task DeleteAsync_WhenUserDoesNotExist_ReturnsNotFound()
     {
         var repository = new FakeUserRepository();
-        var service = new UserService(repository);
+        var service = CreateUserService(repository);
 
         var result = await service.DeleteAsync(Guid.NewGuid());
 
@@ -180,7 +202,7 @@ public class UserServiceTests
     {
         var existing = CreateUser(firstName: "Mario", lastName: "Rossi", email: "mario@example.com");
         var repository = new FakeUserRepository { GetByIdResult = existing };
-        var service = new UserService(repository);
+        var service = CreateUserService(repository);
 
         var result = await service.DeleteAsync(existing.Id);
 
@@ -188,6 +210,73 @@ public class UserServiceTests
         Assert.True(result.Value);
         Assert.True(existing.IsDeleted);
         Assert.Equal(1, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task AuthenticateAsync_WhenPasswordIsWrong_ReturnsUnauthorized()
+    {
+        var user = CreateUser(firstName: "Mario", lastName: "Rossi", email: "mario@example.com");
+        var repository = new FakeUserRepository { GetByEmailResult = user };
+        var passwordHasher = new FakeUserPasswordHasher { VerifyResult = false };
+        var service = new AuthenticationService(repository, passwordHasher);
+
+        var result = await service.AuthenticateAsync(new AuthenticateUserRequest("  MARIO@example.com ", "wrong-password"));
+
+        Assert.Equal(ResultStatus.Unauthorized, result.Status);
+        Assert.Equal("mario@example.com", repository.LastGetByEmailInput);
+        Assert.Equal("wrong-password", passwordHasher.LastVerifiedPassword);
+        Assert.Equal(user.PasswordHash, passwordHasher.LastVerifiedHash);
+    }
+
+    [Fact]
+    public async Task AuthenticateAsync_WhenUserIsInactive_ReturnsUnauthorizedWithoutVerifyingPassword()
+    {
+        var user = CreateUser(firstName: "Mario", lastName: "Rossi", email: "mario@example.com", isActive: false);
+        var repository = new FakeUserRepository { GetByEmailResult = user };
+        var passwordHasher = new FakeUserPasswordHasher();
+        var service = new AuthenticationService(repository, passwordHasher);
+
+        var result = await service.AuthenticateAsync(new AuthenticateUserRequest("mario@example.com", "Password!123"));
+
+        Assert.Equal(ResultStatus.Unauthorized, result.Status);
+        Assert.Null(passwordHasher.LastVerifiedPassword);
+    }
+
+    [Fact]
+    public async Task AuthenticateAsync_WhenCredentialsAreValid_ReturnsCurrentIdentity()
+    {
+        var user = CreateUser(firstName: "Mario", lastName: "Rossi", email: "mario@example.com", userType: UserType.Lilt);
+        var repository = new FakeUserRepository { GetByEmailResult = user };
+        var passwordHasher = new FakeUserPasswordHasher { VerifyResult = true };
+        var service = new AuthenticationService(repository, passwordHasher);
+
+        var result = await service.AuthenticateAsync(new AuthenticateUserRequest("mario@example.com", "Password!123"));
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.NotNull(result.Value);
+        Assert.Equal(user.Id, result.Value!.Id);
+        Assert.Equal("Mario", result.Value.FirstName);
+        Assert.Equal(UserType.Lilt, result.Value.UserType);
+    }
+
+    [Fact]
+    public async Task GetCurrentUserAsync_WhenUserExists_ReturnsCurrentIdentity()
+    {
+        var user = CreateUser(firstName: "Anna", lastName: "Bianchi", email: "anna@example.com", userType: UserType.Volontario);
+        var repository = new FakeUserRepository { GetByIdResult = user };
+        var service = new AuthenticationService(repository, new FakeUserPasswordHasher());
+
+        var result = await service.GetCurrentUserAsync(user.Id);
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.NotNull(result.Value);
+        Assert.Equal("anna@example.com", result.Value!.Email);
+        Assert.Equal(UserType.Volontario, result.Value.UserType);
+    }
+
+    private static UserService CreateUserService(FakeUserRepository repository)
+    {
+        return new UserService(repository, new FakeUserPasswordHasher());
     }
 
     private static CreateUserRequest ValidCreateRequest(
@@ -199,6 +288,7 @@ public class UserServiceTests
             FirstName: firstName,
             LastName: lastName,
             Email: email,
+            InitialPassword: "Password!123",
             Phone: "+39 333 1234567",
             DateOfBirth: new DateOnly(1985, 3, 15),
             EnrollmentDate: new DateOnly(2024, 1, 10),
@@ -217,6 +307,7 @@ public class UserServiceTests
             FirstName: firstName,
             LastName: lastName,
             Email: email,
+            NewPassword: null,
             Phone: "+39 333 1234567",
             DateOfBirth: new DateOnly(1985, 3, 15),
             EnrollmentDate: new DateOnly(2024, 1, 10),
@@ -226,7 +317,7 @@ public class UserServiceTests
             Occupation: "Ingegnere");
     }
 
-    private static User CreateUser(string firstName, string lastName, string email)
+    private static User CreateUser(string firstName, string lastName, string email, bool isActive = true, UserType userType = UserType.Volontario)
     {
         return User.Create(
             firstName,
@@ -236,22 +327,26 @@ public class UserServiceTests
             new DateOnly(1985, 3, 15),
             new DateOnly(2024, 1, 10),
             null,
-            true,
-            UserType.Volontario,
-            "Ingegnere");
+            isActive,
+            userType,
+            "Ingegnere",
+            "hashed::Password!123");
     }
 
     private sealed class FakeUserRepository : IUserRepository
     {
         public User? GetByIdResult { get; set; }
+        public User? GetByEmailResult { get; set; }
         public PagedResult<User> ListResult { get; set; } = new([], 0);
         public bool ExistsByEmailResult { get; set; }
 
         public Func<Guid, User?>? GetByIdHandler { get; set; }
+        public Func<string, User?>? GetByEmailHandler { get; set; }
         public Func<int, int, PagedResult<User>>? ListHandler { get; set; }
         public Func<string, Guid?, bool>? ExistsByEmailHandler { get; set; }
 
         public bool GetByIdCalled { get; private set; }
+        public string? LastGetByEmailInput { get; private set; }
         public int LastListPage { get; private set; }
         public int LastListPageSize { get; private set; }
         public string? LastExistsByEmailInput { get; private set; }
@@ -264,6 +359,13 @@ public class UserServiceTests
         {
             GetByIdCalled = true;
             var user = GetByIdHandler is null ? GetByIdResult : GetByIdHandler(id);
+            return Task.FromResult(user);
+        }
+
+        public Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken ct = default)
+        {
+            LastGetByEmailInput = normalizedEmail;
+            var user = GetByEmailHandler is null ? GetByEmailResult : GetByEmailHandler(normalizedEmail);
             return Task.FromResult(user);
         }
 
@@ -296,6 +398,27 @@ public class UserServiceTests
         {
             SaveChangesCallCount++;
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeUserPasswordHasher : IUserPasswordHasher
+    {
+        public string? LastHashedPassword { get; private set; }
+        public string? LastVerifiedPassword { get; private set; }
+        public string? LastVerifiedHash { get; private set; }
+        public bool VerifyResult { get; set; } = true;
+
+        public string Hash(string password)
+        {
+            LastHashedPassword = password;
+            return $"hashed::{password}";
+        }
+
+        public bool Verify(string password, string passwordHash)
+        {
+            LastVerifiedPassword = password;
+            LastVerifiedHash = passwordHash;
+            return VerifyResult;
         }
     }
 }

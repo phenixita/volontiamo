@@ -66,6 +66,8 @@ Assert-PathExists -Path $webDir -Description 'Directory web'
 
 $powerShellExecutable = Get-PowerShellExecutable
 
+$env:ASPNETCORE_ENVIRONMENT="Development"
+
 Start-AppProcess -Name 'API' -WorkingDirectory $repoRoot -Command "dotnet run --project `"$apiProject`"" -PowerShellExecutable $powerShellExecutable
 Start-AppProcess -Name 'Mobile' -WorkingDirectory $mobileDir -Command 'npm start' -PowerShellExecutable $powerShellExecutable
 Start-AppProcess -Name 'Web' -WorkingDirectory $webDir -Command 'npm run dev' -PowerShellExecutable $powerShellExecutable

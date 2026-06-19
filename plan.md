@@ -3,16 +3,16 @@
 Introdurre autenticazione base end-to-end con email e password memorizzate sul record `User`, token Bearer semplice, `POST /login` pubblico, resto delle API autenticato, ruolo `UserType` solo informativo (`Lilt` o `Volontario`) senza autorizzazioni differenziate. Bootstrap con seed development iniziale; gestione utenti e password iniziale anche da web app; mobile e web devono mostrare l'utente autenticato e il suo tipo.
 
 **Steps**
-1. Phase 1 - Domain contract and tests
-2. Estendere `User` per contenere i dati minimi di autenticazione nel dominio: identificativo di login = `Email`, hash password, eventuale stato coerente con `IsActive`; mantenere `UserType` invariato come enum a 2 valori. *Blocca 3-8*
-3. Estendere i contratti di dominio in `UserService` per supportare creazione utente con password iniziale e lettura del profilo senza esporre hash password; aggiungere un modulo dedicato all'autenticazione (`Authenticate`, `GetCurrentUser`) con interfaccia piccola e profonda. *Blocca 4-8*
-4. Scrivere/aggiornare test L0 nel dominio con fake repository in memoria: creazione utente con password, rifiuto credenziali errate, rifiuto utente inattivo, successo login con ritorno identità corrente. *Dipende da 2-3*
-5. Phase 2 - Persistence and API seam
-6. Estendere persistence EF Core per mappare i nuovi campi auth su `User`, aggiungere migration e allineare repository esistenti affinché leggano/scrivano i campi necessari. *Dipende da 2-3; parallel con 7 solo parzialmente dopo i contratti*
-7. Introdurre nell'API la configurazione auth Bearer semplice e un servizio token dedicato; aggiungere `POST /api/v1/auth/login` pubblico e `GET /api/v1/auth/me` autenticato; applicare autenticazione obbligatoria a `users` ed `events`. *Dipende da 3; blocca 8-10*
-8. Aggiungere bootstrap development coerente: seed di un utente iniziale `Lilt` noto tramite startup development, così `POST /users` può restare protetto e Postman può essere usato dopo login. *Dipende da 6-7*
-9. Estendere `POST /api/v1/users` e `PUT /api/v1/users/{id}` per gestire la password iniziale/aggiornamento minimo richiesto dalla POC senza introdurre reset/forgot password. *Dipende da 3,6,7*
-10. Scrivere/aggiornare test L1 API per login, `/me`, protezione degli endpoint esistenti, seed development e creazione utente con password. *Dipende da 6-9*
+1. Phase 1 - Domain contract and tests [done]
+2. Estendere `User` per contenere i dati minimi di autenticazione nel dominio: identificativo di login = `Email`, hash password, eventuale stato coerente con `IsActive`; mantenere `UserType` invariato come enum a 2 valori. [done] *Blocca 3-8*
+3. Estendere i contratti di dominio in `UserService` per supportare creazione utente con password iniziale e lettura del profilo senza esporre hash password; aggiungere un modulo dedicato all'autenticazione (`Authenticate`, `GetCurrentUser`) con interfaccia piccola e profonda. [done] *Blocca 4-8*
+4. Scrivere/aggiornare test L0 nel dominio con fake repository in memoria: creazione utente con password, rifiuto credenziali errate, rifiuto utente inattivo, successo login con ritorno identità corrente. [done] *Dipende da 2-3*
+5. Phase 2 - Persistence and API seam [done]
+6. Estendere persistence EF Core per mappare i nuovi campi auth su `User`, aggiungere migration e allineare repository esistenti affinché leggano/scrivano i campi necessari. [done] *Dipende da 2-3; parallel con 7 solo parzialmente dopo i contratti*
+7. Introdurre nell'API la configurazione auth Bearer semplice e un servizio token dedicato; aggiungere `POST /api/v1/auth/login` pubblico e `GET /api/v1/auth/me` autenticato; applicare autenticazione obbligatoria a `users` ed `events`. [done] *Dipende da 3; blocca 8-10*
+8. Aggiungere bootstrap development coerente: seed di un utente iniziale `Lilt` noto tramite startup development, così `POST /users` può restare protetto e Postman può essere usato dopo login. [done] *Dipende da 6-7*
+9. Estendere `POST /api/v1/users` e `PUT /api/v1/users/{id}` per gestire la password iniziale/aggiornamento minimo richiesto dalla POC senza introdurre reset/forgot password. [done] *Dipende da 3,6,7*
+10. Scrivere/aggiornare test L1 API per login, `/me`, protezione degli endpoint esistenti, seed development e creazione utente con password. [done] *Dipende da 6-9*
 11. Phase 3 - Web authenticated flow
 12. Introdurre nel frontend Next.js un adapter auth HTTP dedicato, con storage della sessione Bearer sul lato appropriato dell'app, bootstrap dell'utente corrente via `/me`, e propagazione del token alle chiamate `users` ed `events`. *Dipende da 7; blocca 13-14*
 13. Aggiungere schermata/login flow web, proteggere il shell esistente e mostrare utente corrente + `UserType` in un punto stabile dell'interfaccia. *Dipende da 12*

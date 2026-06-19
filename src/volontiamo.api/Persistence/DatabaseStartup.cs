@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using volontiamo.domain;
 
 namespace volontiamo.api.Persistence;
 
@@ -19,6 +20,36 @@ public static class DatabaseStartup
         using var scope = services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await dbContext.Database.MigrateAsync(cancellationToken);
+
+        await SeedDevelopmentUserAsync(scope.ServiceProvider, configuration, cancellationToken);
+    }
+
+    private static async Task SeedDevelopmentUserAsync(
+        IServiceProvider services,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var email = configuration["DevelopmentSeed:Email"] ?? "admin@volontiamo.local";
+        var password = configuration["DevelopmentSeed:Password"] ?? "Volontiamo123!";
+        var firstName = configuration["DevelopmentSeed:FirstName"] ?? "Admin";
+        var lastName = configuration["DevelopmentSeed:LastName"] ?? "LILT";
+
+        var userService = services.GetRequiredService<UserService>();
+        var result = await userService.CreateAsync(new CreateUserRequest(
+            FirstName: firstName,
+            LastName: lastName,
+            Email: email,
+            InitialPassword: password,
+            Phone: null,
+            DateOfBirth: null,
+            EnrollmentDate: DateOnly.FromDateTime(DateTime.UtcNow),
+            EndDate: null,
+            IsActive: true,
+            UserType: UserType.Lilt,
+            Occupation: "Backoffice"), cancellationToken);
+
+        if (result.Status is not ResultStatus.Ok and not ResultStatus.Conflict)
+            throw new InvalidOperationException($"Development user seed failed with status {result.Status}.");
     }
 
     private static async Task EnsureDatabaseExistsAsync(string connectionString, CancellationToken cancellationToken)

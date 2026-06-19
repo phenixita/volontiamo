@@ -12,6 +12,9 @@ public class UserRepository : IUserRepository
     public async Task<User?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => await _db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
 
+    public async Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken ct = default)
+        => await _db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail, ct);
+
     public async Task<PagedResult<User>> ListAsync(int page, int pageSize, CancellationToken ct = default)
     {
         var totalCount = await _db.Users.CountAsync(ct);

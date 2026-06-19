@@ -9,6 +9,9 @@ namespace volontiamo.api.tests.L1;
 
 public class PostgresWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    public const string SeedEmail = "admin@volontiamo.local";
+    public const string SeedPassword = "Volontiamo123!";
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
         .WithImage("postgres:16-alpine")
         .Build();

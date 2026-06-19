@@ -28,6 +28,7 @@ public class AppDbContext : DbContext
             entity.Property(u => u.IsActive).HasColumnName("is_active").IsRequired();
             entity.Property(u => u.UserType).HasColumnName("user_type").IsRequired();
             entity.Property(u => u.Occupation).HasColumnName("occupation").HasMaxLength(200);
+            entity.Property(u => u.PasswordHash).HasColumnName("password_hash").HasColumnType("text").IsRequired();
             entity.Property(u => u.IsDeleted).HasColumnName("is_deleted").IsRequired();
             entity.Property(u => u.CreatedAt).HasColumnName("created_at").IsRequired();
             entity.Property(u => u.UpdatedAt).HasColumnName("updated_at").IsRequired();

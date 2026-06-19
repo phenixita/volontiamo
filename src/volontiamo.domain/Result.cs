@@ -7,7 +7,8 @@ public enum ResultStatus
     Ok,
     NotFound,
     Conflict,
-    ValidationError
+    ValidationError,
+    Unauthorized
 }
 
 public class Result<T>
@@ -29,4 +30,5 @@ public class Result<T>
     public static Result<T> NotFound() => new(default, ResultStatus.NotFound);
     public static Result<T> Conflict(string message) => new(default, ResultStatus.Conflict, message);
     public static Result<T> ValidationFailure(IReadOnlyList<ValidationError> errors) => new(default, ResultStatus.ValidationError, errors: errors);
+    public static Result<T> Unauthorized(string message) => new(default, ResultStatus.Unauthorized, message);
 }

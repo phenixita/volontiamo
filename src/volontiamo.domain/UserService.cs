@@ -4,6 +4,7 @@ public record CreateUserRequest(
     string FirstName,
     string LastName,
     string Email,
+    string InitialPassword,
     string? Phone,
     DateOnly? DateOfBirth,
     DateOnly EnrollmentDate,
@@ -16,6 +17,7 @@ public record UpdateUserRequest(
     string FirstName,
     string LastName,
     string Email,
+    string? NewPassword,
     string? Phone,
     DateOnly? DateOfBirth,
     DateOnly EnrollmentDate,
@@ -42,8 +44,13 @@ public record UserResponse(
 public sealed class UserService
 {
     private readonly IUserRepository _repository;
+    private readonly IUserPasswordHasher _passwordHasher;
 
-    public UserService(IUserRepository repository) => _repository = repository;
+    public UserService(IUserRepository repository, IUserPasswordHasher passwordHasher)
+    {
+        _repository = repository;
+        _passwordHasher = passwordHasher;
+    }
 
     public async Task<Result<UserResponse>> CreateAsync(CreateUserRequest request, CancellationToken ct = default)
     {
@@ -55,6 +62,8 @@ public sealed class UserService
         if (await _repository.ExistsByEmailAsync(normalizedEmail, ct: ct))
             return Result<UserResponse>.Conflict("A user with this email already exists.");
 
+        var passwordHash = _passwordHasher.Hash(request.InitialPassword);
+
         var user = User.Create(
             request.FirstName,
             request.LastName,
@@ -65,7 +74,8 @@ public sealed class UserService
             request.EndDate,
             request.IsActive,
             request.UserType,
-            request.Occupation);
+            request.Occupation,
+            passwordHash);
 
         await _repository.AddAsync(user, ct);
         await _repository.SaveChangesAsync(ct);
@@ -119,6 +129,9 @@ public sealed class UserService
             request.UserType,
             request.Occupation);
 
+        if (!string.IsNullOrWhiteSpace(request.NewPassword))
+            user.SetPasswordHash(_passwordHasher.Hash(request.NewPassword));
+
         await _repository.SaveChangesAsync(ct);
 
         return Result<UserResponse>.Success(MapToResponse(user));
@@ -145,6 +158,8 @@ public sealed class UserService
             errors.Add(new("lastName", "Last name is required."));
         if (string.IsNullOrWhiteSpace(r.Email))
             errors.Add(new("email", "Email is required."));
+        if (string.IsNullOrWhiteSpace(r.InitialPassword))
+            errors.Add(new("initialPassword", "Initial password is required."));
         if (r.EndDate.HasValue && r.EndDate < r.EnrollmentDate)
             errors.Add(new("endDate", "End date cannot be earlier than enrollment date."));
         return errors;
@@ -159,6 +174,8 @@ public sealed class UserService
             errors.Add(new("lastName", "Last name is required."));
         if (string.IsNullOrWhiteSpace(r.Email))
             errors.Add(new("email", "Email is required."));
+        if (r.NewPassword is not null && string.IsNullOrWhiteSpace(r.NewPassword))
+            errors.Add(new("newPassword", "New password cannot be empty."));
         if (r.EndDate.HasValue && r.EndDate < r.EnrollmentDate)
             errors.Add(new("endDate", "End date cannot be earlier than enrollment date."));
         return errors;

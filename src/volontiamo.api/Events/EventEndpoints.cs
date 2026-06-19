@@ -8,7 +8,8 @@ public static class EventEndpoints
     public static void MapEventEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/events")
-            .WithTags("Events");
+            .WithTags("Events")
+            .RequireAuthorization();
 
         group.MapPost("/", CreateEvent);
         group.MapGet("/", ListEvents);

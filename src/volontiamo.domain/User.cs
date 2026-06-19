@@ -19,6 +19,7 @@ public class User
     public bool IsActive { get; private set; }
     public UserType UserType { get; private set; }
     public string? Occupation { get; private set; }
+    public string PasswordHash { get; private set; } = default!;
     public bool IsDeleted { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
@@ -35,7 +36,8 @@ public class User
         DateOnly? endDate,
         bool isActive,
         UserType userType,
-        string? occupation)
+        string? occupation,
+        string passwordHash)
     {
         var now = DateTime.UtcNow;
         return new User
@@ -51,6 +53,7 @@ public class User
             IsActive = isActive,
             UserType = userType,
             Occupation = occupation,
+            PasswordHash = passwordHash,
             IsDeleted = false,
             CreatedAt = now,
             UpdatedAt = now
@@ -79,6 +82,12 @@ public class User
         IsActive = isActive;
         UserType = userType;
         Occupation = occupation;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SetPasswordHash(string passwordHash)
+    {
+        PasswordHash = passwordHash;
         UpdatedAt = DateTime.UtcNow;
     }
 

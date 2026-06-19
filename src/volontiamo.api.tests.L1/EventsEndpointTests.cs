@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using volontiamo.api.Auth;
 using volontiamo.api.Events;
 using volontiamo.domain;
 
@@ -14,9 +16,30 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         _client = factory.CreateClient();
     }
 
+    private async Task AuthenticateAsSeedUserAsync()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/login", new AuthenticateUserRequest(
+            PostgresWebApplicationFactory.SeedEmail,
+            PostgresWebApplicationFactory.SeedPassword));
+        response.EnsureSuccessStatusCode();
+        var login = await response.Content.ReadFromJsonAsync<LoginResponse>();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.AccessToken);
+    }
+
+    [Fact]
+    public async Task Events_WithoutBearerToken_ReturnsUnauthorized()
+    {
+        _client.DefaultRequestHeaders.Authorization = null;
+
+        var response = await _client.GetAsync("/api/v1/events");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     [Fact]
     public async Task Create_ValidEvent_ReturnsCreatedWithNumericId()
     {
+        await AuthenticateAsSeedUserAsync();
         var request = ValidCreateRequest();
 
         var response = await _client.PostAsJsonAsync("/api/v1/events", request);
@@ -32,6 +55,7 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
     [Fact]
     public async Task Create_InvalidDates_ReturnsValidationProblem()
     {
+        await AuthenticateAsSeedUserAsync();
         var request = ValidCreateRequest() with
         {
             StartAtUtc = Utc(2026, 8, 1, 12),
@@ -49,6 +73,7 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
     [Fact]
     public async Task List_DefaultIncludesDraftAndActiveButExcludesConcluded()
     {
+        await AuthenticateAsSeedUserAsync();
         var token = Guid.NewGuid().ToString("N");
         var draft = await CreateEventAsync(ValidCreateRequest(name: $"{token} draft", status: EventStatus.Draft));
         var active = await CreateEventAsync(ValidCreateRequest(name: $"{token} active", status: EventStatus.Active));
@@ -68,6 +93,7 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
     [Fact]
     public async Task List_FilterByNameIsCaseInsensitive()
     {
+        await AuthenticateAsSeedUserAsync();
         var token = Guid.NewGuid().ToString("N");
         var expected = await CreateEventAsync(ValidCreateRequest(name: $"Prevenzione {token}", status: EventStatus.Active));
         await CreateEventAsync(ValidCreateRequest(name: $"Altro {Guid.NewGuid():N}", status: EventStatus.Active));
@@ -83,6 +109,7 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
     [Fact]
     public async Task List_StatusFilterCanIncludeConcludedOrAll()
     {
+        await AuthenticateAsSeedUserAsync();
         var token = Guid.NewGuid().ToString("N");
         var draft = await CreateEventAsync(ValidCreateRequest(name: $"{token} draft", status: EventStatus.Draft));
         var concluded = await CreateEventAsync(ValidCreateRequest(name: $"{token} concluded", status: EventStatus.Concluded));
@@ -103,6 +130,7 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
     [Fact]
     public async Task List_ReturnsPaginatedEventsOrderedByStartThenName()
     {
+        await AuthenticateAsSeedUserAsync();
         var token = Guid.NewGuid().ToString("N");
         var first = await CreateEventAsync(ValidCreateRequest(name: $"{token} A", startAtUtc: Utc(2026, 9, 1, 8)));
         var second = await CreateEventAsync(ValidCreateRequest(name: $"{token} B", startAtUtc: Utc(2026, 9, 2, 8)));
@@ -123,6 +151,7 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
     [Fact]
     public async Task Delete_ExistingEvent_ReturnsNoContentAndExcludesFromList()
     {
+        await AuthenticateAsSeedUserAsync();
         var token = Guid.NewGuid().ToString("N");
         var eventItem = await CreateEventAsync(ValidCreateRequest(name: $"{token} cancellazione", status: EventStatus.Active));
 
