@@ -8,6 +8,14 @@ public record CreateEventRequest(
     string? OperationalNotesMarkdown,
     EventStatus Status);
 
+public record UpdateEventRequest(
+    string Name,
+    DateTime StartAtUtc,
+    DateTime EndAtUtc,
+    string? Location,
+    string? OperationalNotesMarkdown,
+    EventStatus Status);
+
 public record EventListRequest(
     string? Name,
     IReadOnlySet<EventStatus>? Statuses,
@@ -88,7 +96,7 @@ public sealed class EventService
 
     public async Task<Result<EventResponse>> CreateAsync(CreateEventRequest request, CancellationToken ct = default)
     {
-        var validationErrors = ValidateCreate(request);
+        var validationErrors = ValidateEvent(request.Name, request.StartAtUtc, request.EndAtUtc);
         if (validationErrors.Count > 0)
             return Result<EventResponse>.ValidationFailure(validationErrors);
 
@@ -104,6 +112,29 @@ public sealed class EventService
         await _repository.SaveChangesAsync(ct);
 
         return Result<EventResponse>.Success(MapToResponse(eventItem, 0));
+    }
+
+    public async Task<Result<bool>> UpdateAsync(int id, UpdateEventRequest request, CancellationToken ct = default)
+    {
+        var eventItem = await _repository.GetByIdAsync(id, ct);
+        if (eventItem is null || eventItem.IsDeleted)
+            return Result<bool>.NotFound();
+
+        var validationErrors = ValidateEvent(request.Name, request.StartAtUtc, request.EndAtUtc);
+        if (validationErrors.Count > 0)
+            return Result<bool>.ValidationFailure(validationErrors);
+
+        eventItem.Update(
+            request.Name,
+            request.StartAtUtc,
+            request.EndAtUtc,
+            request.Location,
+            request.OperationalNotesMarkdown,
+            request.Status);
+
+        await _repository.SaveChangesAsync(ct);
+
+        return Result<bool>.Success(true);
     }
 
     public async Task<PagedResponse<EventResponse>> ListAsync(EventListRequest request, CancellationToken ct = default)
@@ -188,16 +219,32 @@ public sealed class EventService
         return Result<ParticipantEventResponse>.Success(MapToParticipantResponse(eventItem, participation.Status));
     }
 
-    private static List<ValidationError> ValidateCreate(CreateEventRequest r)
+    public async Task<Result<bool>> RemoveParticipantAsync(int eventId, Guid userId, CancellationToken ct = default)
+    {
+        var eventItem = await _repository.GetByIdAsync(eventId, ct);
+        if (eventItem is null || eventItem.IsDeleted)
+            return Result<bool>.NotFound();
+
+        var participation = await _repository.GetParticipationAsync(eventId, userId, ct);
+        if (participation is null || participation.Status != EventParticipationStatus.Accepted)
+            return Result<bool>.NotFound();
+
+        participation.ChangeStatus(EventParticipationStatus.Refused, _timeProvider.GetUtcNow().UtcDateTime);
+        await _repository.SaveChangesAsync(ct);
+
+        return Result<bool>.Success(true);
+    }
+
+    private static List<ValidationError> ValidateEvent(string name, DateTime startAtUtc, DateTime endAtUtc)
     {
         var errors = new List<ValidationError>();
-        if (string.IsNullOrWhiteSpace(r.Name))
+        if (string.IsNullOrWhiteSpace(name))
             errors.Add(new("name", "Name is required."));
-        if (r.StartAtUtc.Kind != DateTimeKind.Utc)
+        if (startAtUtc.Kind != DateTimeKind.Utc)
             errors.Add(new("startAtUtc", "Start date must be UTC."));
-        if (r.EndAtUtc.Kind != DateTimeKind.Utc)
+        if (endAtUtc.Kind != DateTimeKind.Utc)
             errors.Add(new("endAtUtc", "End date must be UTC."));
-        if (r.EndAtUtc < r.StartAtUtc)
+        if (endAtUtc < startAtUtc)
             errors.Add(new("endAtUtc", "End date cannot be earlier than start date."));
         return errors;
     }

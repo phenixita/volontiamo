@@ -58,6 +58,8 @@ export interface CreateEventInput {
   status: EventStatus;
 }
 
+export type UpdateEventInput = CreateEventInput;
+
 export type EventMutationResult =
   | { ok: true; data?: EventDto }
   | { ok: false; kind: EventsReadErrorKind; message: string; statusCode?: number };

@@ -51,6 +51,23 @@ public class Event
         };
     }
 
+    public void Update(
+        string name,
+        DateTime startAtUtc,
+        DateTime endAtUtc,
+        string? location,
+        string? operationalNotesMarkdown,
+        EventStatus status)
+    {
+        Name = name.Trim();
+        StartAtUtc = startAtUtc;
+        EndAtUtc = endAtUtc;
+        Location = string.IsNullOrWhiteSpace(location) ? null : location.Trim();
+        OperationalNotesMarkdown = operationalNotesMarkdown ?? string.Empty;
+        Status = status;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void SoftDelete()
     {
         IsDeleted = true;

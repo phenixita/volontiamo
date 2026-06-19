@@ -334,6 +334,110 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         Assert.Contains(paged!.Items, e => e.Id == eventItem.Id);
     }
 
+    [Fact]
+    public async Task Update_ExistingEvent_ReturnsNoContentAndPersistsChanges()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var token = Guid.NewGuid().ToString("N");
+        var eventItem = await CreateEventAsync(ValidCreateRequest(name: $"{token} originale", status: EventStatus.Draft, startAtUtc: Utc(2026, 8, 1, 8)));
+
+        var updateRequest = new UpdateEventRequest(
+            Name: $"{token} aggiornato",
+            StartAtUtc: Utc(2026, 9, 1, 9),
+            EndAtUtc: Utc(2026, 9, 1, 13),
+            Location: "Nuova sede",
+            OperationalNotesMarkdown: "## Aggiornato",
+            Status: EventStatus.Active);
+
+        var updateResponse = await _client.PutAsJsonAsync($"/api/v1/events/{eventItem.Id}", updateRequest);
+        var detailResponse = await _client.GetAsync($"/api/v1/events/{eventItem.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, updateResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        var detail = await detailResponse.Content.ReadFromJsonAsync<EventDetailResponse>();
+        Assert.NotNull(detail);
+        Assert.Equal($"{token} aggiornato", detail!.Name);
+        Assert.Equal("Nuova sede", detail.Location);
+        Assert.Equal(EventStatus.Active, detail.Status);
+        Assert.Equal(Utc(2026, 9, 1, 9), detail.StartAtUtc);
+    }
+
+    [Fact]
+    public async Task Update_WhenEventDoesNotExist_ReturnsNotFound()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var updateRequest = new UpdateEventRequest(
+            Name: "Inesistente",
+            StartAtUtc: Utc(2026, 9, 1, 9),
+            EndAtUtc: Utc(2026, 9, 1, 13),
+            Location: "Sede",
+            OperationalNotesMarkdown: "Note",
+            Status: EventStatus.Active);
+
+        var response = await _client.PutAsJsonAsync("/api/v1/events/999999", updateRequest);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_WithInvalidDates_ReturnsValidationProblem()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var eventItem = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Draft));
+
+        var updateRequest = new UpdateEventRequest(
+            Name: "Aggiornato",
+            StartAtUtc: Utc(2026, 9, 1, 12),
+            EndAtUtc: Utc(2026, 9, 1, 10),
+            Location: "Sede",
+            OperationalNotesMarkdown: "Note",
+            Status: EventStatus.Active);
+
+        var response = await _client.PutAsJsonAsync($"/api/v1/events/{eventItem.Id}", updateRequest);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ValidationProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Contains("endAtUtc", problem!.Errors.Keys);
+    }
+
+    [Fact]
+    public async Task RemoveParticipant_WhenAccepted_ReturnsNoContentAndExcludesFromDetail()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var token = Guid.NewGuid().ToString("N");
+        var eventItem = await CreateEventAsync(ValidCreateRequest(name: $"{token} rimozione", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+
+        var volunteerEmail = $"vol-{Guid.NewGuid():N}@volontiamo.local";
+        const string volunteerPassword = "Volontiamo123!";
+        var volunteer = await CreateUserAsync(volunteerEmail, volunteerPassword);
+
+        await AuthenticateAsAsync(volunteerEmail, volunteerPassword);
+        await SetParticipationAsync(eventItem.Id, EventParticipationStatus.Accepted);
+
+        await AuthenticateAsSeedUserAsync();
+        var removeResponse = await _client.DeleteAsync($"/api/v1/events/{eventItem.Id}/participants/{volunteer.Id}");
+        var detailResponse = await _client.GetAsync($"/api/v1/events/{eventItem.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, removeResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        var detail = await detailResponse.Content.ReadFromJsonAsync<EventDetailResponse>();
+        Assert.NotNull(detail);
+        Assert.Equal(0, detail!.AcceptedParticipantsCount);
+        Assert.DoesNotContain(detail.AcceptedParticipants, p => p.UserId == volunteer.Id);
+    }
+
+    [Fact]
+    public async Task RemoveParticipant_WhenNotAccepted_ReturnsNotFound()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var eventItem = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+
+        var response = await _client.DeleteAsync($"/api/v1/events/{eventItem.Id}/participants/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private async Task<EventResponse> CreateEventAsync(CreateEventRequest request)
     {
         var response = await _client.PostAsJsonAsync("/api/v1/events", request);

@@ -10,6 +10,7 @@ import type {
   EventStatus,
   PagedResponse,
   ReadEventsInput,
+  UpdateEventInput,
 } from "@/lib/events/contracts";
 import { readSessionToken } from "@/lib/auth/session";
 import { isRecord, readApiBaseUrl, readHttpErrorMessage } from "@/lib/http";
@@ -279,6 +280,73 @@ export async function deleteEvent(id: number): Promise<EventMutationResult> {
   if (!response.ok) {
     const detail = await readHttpErrorMessage(response);
     const baseMessage = `Cancellazione evento fallita (${response.status}).`;
+    return { ok: false, kind: "http", statusCode: response.status, message: detail ? `${baseMessage} ${detail}` : baseMessage };
+  }
+
+  return { ok: true };
+}
+
+export async function updateEvent(id: number, input: UpdateEventInput): Promise<EventMutationResult> {
+  const baseUrlResult = readApiBaseUrl();
+  if (!baseUrlResult.ok) {
+    return { ok: false, kind: "configuration", message: baseUrlResult.message };
+  }
+
+  const token = await readSessionToken();
+  if (!token) {
+    return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
+  }
+
+  const url = new URL(`${EVENTS_ROUTE}/${id}`, baseUrlResult.value);
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      method: "PUT",
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, kind: "network", message: "Backend non raggiungibile durante l'aggiornamento evento." };
+  }
+
+  if (!response.ok) {
+    const detail = await readHttpErrorMessage(response);
+    const baseMessage = `Aggiornamento evento fallito (${response.status}).`;
+    return { ok: false, kind: "http", statusCode: response.status, message: detail ? `${baseMessage} ${detail}` : baseMessage };
+  }
+
+  return { ok: true };
+}
+
+export async function removeParticipant(eventId: number, userId: string): Promise<EventMutationResult> {
+  const baseUrlResult = readApiBaseUrl();
+  if (!baseUrlResult.ok) {
+    return { ok: false, kind: "configuration", message: baseUrlResult.message };
+  }
+
+  const token = await readSessionToken();
+  if (!token) {
+    return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
+  }
+
+  const url = new URL(`${EVENTS_ROUTE}/${eventId}/participants/${userId}`, baseUrlResult.value);
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      method: "DELETE",
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    return { ok: false, kind: "network", message: "Backend non raggiungibile durante la rimozione del volontario." };
+  }
+
+  if (!response.ok) {
+    const detail = await readHttpErrorMessage(response);
+    const baseMessage = `Rimozione volontario fallita (${response.status}).`;
     return { ok: false, kind: "http", statusCode: response.status, message: detail ? `${baseMessage} ${detail}` : baseMessage };
   }
 

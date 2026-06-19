@@ -16,8 +16,10 @@ public static class EventEndpoints
         group.MapGet("/my", ListMyEvents);
         group.MapGet("/", ListEvents);
         group.MapGet("/{id:int}", GetEventDetail);
+        group.MapPut("/{id:int}", UpdateEvent);
         group.MapPut("/{id:int}/participation", SetParticipation);
         group.MapDelete("/{id:int}", DeleteEvent);
+        group.MapDelete("/{eventId:int}/participants/{userId:guid}", RemoveParticipant);
     }
 
     private static async Task<IResult> CreateEvent(
@@ -153,6 +155,45 @@ public static class EventEndpoints
             ResultStatus.Ok => Results.NoContent(),
             ResultStatus.NotFound => Results.Problem(
                 detail: "Event not found.",
+                statusCode: 404,
+                title: "Not Found"),
+            _ => Results.StatusCode(500)
+        };
+    }
+
+    private static async Task<IResult> UpdateEvent(
+        int id,
+        [FromBody] UpdateEventRequest request,
+        [FromServices] EventService service,
+        CancellationToken ct)
+    {
+        var result = await service.UpdateAsync(id, request, ct);
+        return result.Status switch
+        {
+            ResultStatus.Ok => Results.NoContent(),
+            ResultStatus.NotFound => Results.Problem(
+                detail: "Event not found.",
+                statusCode: 404,
+                title: "Not Found"),
+            ResultStatus.ValidationError => Results.ValidationProblem(
+                result.Errors.GroupBy(e => e.Field)
+                    .ToDictionary(g => g.Key, g => g.Select(e => e.Message).ToArray())),
+            _ => Results.StatusCode(500)
+        };
+    }
+
+    private static async Task<IResult> RemoveParticipant(
+        int eventId,
+        Guid userId,
+        [FromServices] EventService service,
+        CancellationToken ct)
+    {
+        var result = await service.RemoveParticipantAsync(eventId, userId, ct);
+        return result.Status switch
+        {
+            ResultStatus.Ok => Results.NoContent(),
+            ResultStatus.NotFound => Results.Problem(
+                detail: "Event or participation not found.",
                 statusCode: 404,
                 title: "Not Found"),
             _ => Results.StatusCode(500)

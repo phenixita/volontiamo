@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { EventStatus } from "@/lib/events/contracts";
-import { createEvent, deleteEvent } from "@/lib/events/http-events-adapter";
+import { createEvent, deleteEvent, removeParticipant, updateEvent } from "@/lib/events/http-events-adapter";
 
 const ROME_TIME_ZONE = "Europe/Rome";
 
@@ -108,4 +108,48 @@ export async function deleteEventAction(id: number) {
 
   revalidatePath("/events");
   redirect("/events");
+}
+
+export async function updateEventAction(id: number, formData: FormData) {
+  const name = readRequiredString(formData, "name");
+  const startDate = readRequiredString(formData, "startDate");
+  const startTime = readRequiredString(formData, "startTime");
+  const endDate = readRequiredString(formData, "endDate");
+  const endTime = readRequiredString(formData, "endTime");
+  const location = readRequiredString(formData, "location");
+  const operationalNotesMarkdown = readRequiredString(formData, "operationalNotesMarkdown");
+  const status = parseStatus(readRequiredString(formData, "status"));
+
+  const startAtUtc = romeLocalToUtcIso(startDate, startTime);
+  const endAtUtc = romeLocalToUtcIso(endDate, endTime);
+  if (!startAtUtc || !endAtUtc) {
+    redirect(`/events/${id}/edit?error=${encodeURIComponent("Date e orari non sono validi.")}`);
+  }
+
+  const result = await updateEvent(id, {
+    name,
+    startAtUtc,
+    endAtUtc,
+    location: location.length > 0 ? location : null,
+    operationalNotesMarkdown,
+    status,
+  });
+
+  if (!result.ok) {
+    redirect(`/events/${id}/edit?error=${encodeURIComponent(result.message)}`);
+  }
+
+  revalidatePath("/events");
+  revalidatePath(`/events/${id}`);
+  redirect(`/events/${id}`);
+}
+
+export async function removeParticipantAction(eventId: number, userId: string) {
+  const result = await removeParticipant(eventId, userId);
+  if (!result.ok) {
+    redirect(`/events/${eventId}?error=${encodeURIComponent(result.message)}`);
+  }
+
+  revalidatePath(`/events/${eventId}`);
+  redirect(`/events/${eventId}`);
 }

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
 import { AppShell } from "@/app/components/app-shell";
-import { deleteEventAction } from "@/app/events/actions";
+import { deleteEventAction, removeParticipantAction } from "@/app/events/actions";
 import { requireCurrentUser } from "@/lib/auth/session";
 import type { EventDetailDto } from "@/lib/events/contracts";
 import { readEventDetail } from "@/lib/events/http-events-adapter";
@@ -94,7 +94,6 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
             Torna alla lista
           </Link>
         </div>
-
         <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           <InfoCard label="Inizio" value={formatDateTime(eventDetail.startAtUtc)} />
           <InfoCard label="Fine" value={formatDateTime(eventDetail.endAtUtc)} />
@@ -130,6 +129,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                     <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Cognome</th>
                     <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Email</th>
                     <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Telefono</th>
+                    <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Azioni</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -139,6 +139,13 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                       <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.lastName}</td>
                       <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.email}</td>
                       <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.phone?.trim() || "Non disponibile"}</td>
+                      <td className="px-2 py-3 text-sm text-[var(--text-soft)]">
+                        <form action={removeParticipantAction.bind(null, eventDetail.id, participant.userId)}>
+                          <button type="submit" className="rounded-full border border-[var(--border-subtle)] bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
+                            Rimuovi
+                          </button>
+                        </form>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -148,6 +155,9 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
         </section>
 
         <div className="mt-6 flex flex-col gap-3 border-t border-[var(--border-subtle)] pt-5 sm:flex-row sm:items-center sm:justify-end">
+          <Link href={`/events/${eventDetail.id}/edit`} className="inline-flex justify-center rounded-full border border-[var(--border-subtle)] bg-white px-5 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
+            Modifica
+          </Link>
           <details>
             <summary className="cursor-pointer rounded-full border border-[var(--border-subtle)] bg-white px-5 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
               Elimina evento

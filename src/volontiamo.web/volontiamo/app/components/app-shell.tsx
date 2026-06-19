@@ -105,11 +105,6 @@ export function AppShell({ activePath, title, eyebrow, currentUser, badge, child
                   <p className="mt-1 max-w-[260px] truncate text-xs text-[var(--text-muted)]">{currentUser.email}</p>
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
-                  {badge ? (
-                    <div className="rounded-full bg-white/88 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-soft)] shadow-[var(--panel-shadow)]">
-                      {badge}
-                    </div>
-                  ) : null}
                   <form action={logoutAction}>
                     <button type="submit" className="rounded-full border border-[var(--border-subtle)] bg-white/88 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-soft)] shadow-[var(--panel-shadow)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
                       Esci

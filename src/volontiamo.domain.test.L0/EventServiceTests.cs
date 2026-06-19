@@ -324,6 +324,171 @@ public class EventServiceTests
         Assert.Equal(0, repository.SaveChangesCallCount);
     }
 
+    [Fact]
+    public async Task UpdateAsync_WhenRequestIsValid_UpdatesEventAndPersists()
+    {
+        var eventItem = CreateEvent(id: 20, name: "Originale", status: EventStatus.Draft, startAtUtc: Utc(2026, 7, 1, 8));
+        var repository = new FakeEventRepository { Events = [eventItem] };
+        var service = CreateService(repository);
+
+        var result = await service.UpdateAsync(eventItem.Id, ValidUpdateRequest(name: "  Aggiornato  ", location: "  ", status: EventStatus.Active));
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.True(result.Value);
+        Assert.Equal("Aggiornato", eventItem.Name);
+        Assert.Null(eventItem.Location);
+        Assert.Equal(EventStatus.Active, eventItem.Status);
+        Assert.Equal(1, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenEventIsMissing_ReturnsNotFound()
+    {
+        var repository = new FakeEventRepository();
+        var service = CreateService(repository);
+
+        var result = await service.UpdateAsync(404, ValidUpdateRequest());
+
+        Assert.Equal(ResultStatus.NotFound, result.Status);
+        Assert.Equal(0, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenEventIsDeleted_ReturnsNotFound()
+    {
+        var eventItem = CreateEvent(id: 21, name: "Cancellato", status: EventStatus.Draft, startAtUtc: Utc(2026, 7, 1, 8));
+        eventItem.SoftDelete();
+        var repository = new FakeEventRepository { Events = [eventItem] };
+        var service = CreateService(repository);
+
+        var result = await service.UpdateAsync(eventItem.Id, ValidUpdateRequest());
+
+        Assert.Equal(ResultStatus.NotFound, result.Status);
+        Assert.Equal(0, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenEndIsBeforeStart_ReturnsValidationError()
+    {
+        var eventItem = CreateEvent(id: 22, name: "Da validare", status: EventStatus.Draft, startAtUtc: Utc(2026, 7, 1, 8));
+        var repository = new FakeEventRepository { Events = [eventItem] };
+        var service = CreateService(repository);
+
+        var result = await service.UpdateAsync(eventItem.Id, ValidUpdateRequest() with
+        {
+            StartAtUtc = Utc(2026, 7, 1, 10),
+            EndAtUtc = Utc(2026, 7, 1, 9)
+        });
+
+        Assert.Equal(ResultStatus.ValidationError, result.Status);
+        Assert.Contains(result.Errors, e => e.Field == "endAtUtc");
+        Assert.Equal(0, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenNameIsBlank_ReturnsValidationError()
+    {
+        var eventItem = CreateEvent(id: 23, name: "Da validare", status: EventStatus.Draft, startAtUtc: Utc(2026, 7, 1, 8));
+        var repository = new FakeEventRepository { Events = [eventItem] };
+        var service = CreateService(repository);
+
+        var result = await service.UpdateAsync(eventItem.Id, ValidUpdateRequest(name: "   "));
+
+        Assert.Equal(ResultStatus.ValidationError, result.Status);
+        Assert.Contains(result.Errors, e => e.Field == "name");
+        Assert.Equal(0, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenDatesAreNotUtc_ReturnsValidationError()
+    {
+        var eventItem = CreateEvent(id: 24, name: "Da validare", status: EventStatus.Draft, startAtUtc: Utc(2026, 7, 1, 8));
+        var repository = new FakeEventRepository { Events = [eventItem] };
+        var service = CreateService(repository);
+
+        var result = await service.UpdateAsync(eventItem.Id, ValidUpdateRequest() with
+        {
+            StartAtUtc = new DateTime(2026, 7, 1, 8, 0, 0, DateTimeKind.Unspecified)
+        });
+
+        Assert.Equal(ResultStatus.ValidationError, result.Status);
+        Assert.Contains(result.Errors, e => e.Field == "startAtUtc");
+        Assert.Equal(0, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task RemoveParticipantAsync_WhenAccepted_SetsRefusedAndPersists()
+    {
+        var userId = Guid.NewGuid();
+        var eventItem = CreateEvent(id: 30, name: "Con volontario", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
+        var participation = EventParticipation.Create(eventItem.Id, userId, EventParticipationStatus.Accepted, FixedNowUtc.AddDays(-1));
+        var repository = new FakeEventRepository { Events = [eventItem], Participations = [participation] };
+        var service = CreateService(repository);
+
+        var result = await service.RemoveParticipantAsync(eventItem.Id, userId);
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.True(result.Value);
+        Assert.Equal(EventParticipationStatus.Refused, participation.Status);
+        Assert.Equal(1, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task RemoveParticipantAsync_WhenEventIsMissing_ReturnsNotFound()
+    {
+        var repository = new FakeEventRepository();
+        var service = CreateService(repository);
+
+        var result = await service.RemoveParticipantAsync(404, Guid.NewGuid());
+
+        Assert.Equal(ResultStatus.NotFound, result.Status);
+        Assert.Equal(0, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task RemoveParticipantAsync_WhenParticipationIsMissing_ReturnsNotFound()
+    {
+        var eventItem = CreateEvent(id: 31, name: "Senza volontario", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
+        var repository = new FakeEventRepository { Events = [eventItem] };
+        var service = CreateService(repository);
+
+        var result = await service.RemoveParticipantAsync(eventItem.Id, Guid.NewGuid());
+
+        Assert.Equal(ResultStatus.NotFound, result.Status);
+        Assert.Equal(0, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task RemoveParticipantAsync_WhenAlreadyRefused_ReturnsNotFound()
+    {
+        var userId = Guid.NewGuid();
+        var eventItem = CreateEvent(id: 32, name: "Gia rifiutato", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
+        var participation = EventParticipation.Create(eventItem.Id, userId, EventParticipationStatus.Refused, FixedNowUtc.AddDays(-1));
+        var repository = new FakeEventRepository { Events = [eventItem], Participations = [participation] };
+        var service = CreateService(repository);
+
+        var result = await service.RemoveParticipantAsync(eventItem.Id, userId);
+
+        Assert.Equal(ResultStatus.NotFound, result.Status);
+        Assert.Equal(EventParticipationStatus.Refused, participation.Status);
+        Assert.Equal(0, repository.SaveChangesCallCount);
+    }
+
+    private static UpdateEventRequest ValidUpdateRequest(
+        string name = "Giornata aggiornata",
+        string? location = "Sede LILT",
+        string? notes = "## Operativo\n- Accoglienza volontari",
+        EventStatus status = EventStatus.Active)
+    {
+        return new UpdateEventRequest(
+            Name: name,
+            StartAtUtc: Utc(2026, 7, 1, 8),
+            EndAtUtc: Utc(2026, 7, 1, 12),
+            Location: location,
+            OperationalNotesMarkdown: notes,
+            Status: status);
+    }
+
     private static CreateEventRequest ValidCreateRequest(
         string name = "Giornata prevenzione",
         string? location = "Sede LILT",
