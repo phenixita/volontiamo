@@ -4,20 +4,13 @@ const metrics = [
   { label: "Nuovi ingressi", value: "12", tone: "calm" },
 ];
 
-const rosterPreview = [
-  { name: "Marina Lotti", area: "Accoglienza", shift: "08:30 - 12:30", status: "Confermato" },
-  { name: "Paolo Bellini", area: "Trasporto", shift: "09:00 - 13:00", status: "In verifica" },
-  { name: "Giulia Moretti", area: "Fundraising", shift: "14:00 - 18:00", status: "Confermato" },
-  { name: "Fabio Zeni", area: "Front office", shift: "15:30 - 19:00", status: "Disponibile" },
-];
-
 export default function Home() {
   return (
-    <main className="relative min-h-screen overflow-hidden px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
+    <main className="relative min-h-screen overflow-hidden">
       <div className="ambient-orb left-[-80px] top-8 h-56 w-56 bg-[var(--brand-red-glow)]" />
       <div className="ambient-orb bottom-14 right-[-60px] h-48 w-48 bg-white/55" />
 
-      <div className="vol-shell mx-auto flex min-h-[calc(100vh-1.5rem)] max-w-[1680px] flex-col rounded-[36px] border border-white/65 bg-[var(--shell-background)] shadow-[var(--shell-shadow)] sm:min-h-[calc(100vh-2rem)] lg:min-h-[calc(100vh-3rem)]">
+      <div className="vol-shell flex min-h-screen w-full flex-col bg-[var(--shell-background)]">
         <header className="border-b border-[var(--border-subtle)] bg-white/80 px-4 py-4 backdrop-blur-xl md:px-6 lg:px-8">
           <div className="flex items-start gap-4 lg:items-center">
             <details className="mobile-nav group relative md:hidden">
@@ -47,7 +40,7 @@ export default function Home() {
                 <nav aria-label="Navigazione mobile" className="flex flex-col gap-3">
                   <a
                     href="#"
-                    className="rounded-[22px] bg-[var(--brand-red)] px-4 py-4 text-base font-semibold text-white shadow-[var(--accent-shadow)] transition hover:bg-[var(--brand-red-deep)]"
+                    className="rounded-xl border border-[color:rgba(255,255,255,0.18)] bg-[var(--brand-red)] px-4 py-3 text-base font-semibold text-white shadow-[var(--accent-shadow)] transition hover:bg-[var(--brand-red-deep)]"
                   >
                     Volontari
                   </a>
@@ -119,11 +112,10 @@ export default function Home() {
               <nav aria-label="Navigazione principale" className="mt-8 flex flex-col gap-3">
                 <a
                   href="#"
-                  className="rounded-[24px] bg-[var(--text-strong)] px-5 py-4 text-base font-semibold text-white shadow-[var(--panel-shadow)] transition hover:-translate-y-0.5"
+                  className="rounded-xl border border-[var(--border-subtle)] bg-white px-4 py-3 text-base font-semibold text-[var(--text-strong)] shadow-[var(--panel-shadow)] transition hover:border-[var(--brand-red)] hover:bg-[var(--surface-subtle)]"
                 >
                   <span className="flex items-center justify-between gap-3">
                     Volontari
-                    
                   </span>
                 </a>
               </nav>
@@ -138,7 +130,7 @@ export default function Home() {
                     Area operativa
                   </p>
                   <h1 className="mt-3 font-[family:var(--font-display)] text-5xl leading-[0.92] sm:text-[4.4rem]">
-                    Coordinamento volontari, con una presenza visiva finalmente all&apos;altezza.
+                    Coordinamento volontari.
                   </h1>
                   <p className="mt-4 max-w-xl text-sm leading-7 text-white/72 sm:text-base">
                     La shell separa navigazione, stato operativo e workspace dati con piu ritmo, meno cornici ridondanti e un tono molto piu contemporaneo.
@@ -167,104 +159,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="rounded-[30px] bg-white/82 p-4 shadow-[var(--panel-shadow)] ring-1 ring-white/70 sm:p-5">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex min-h-14 flex-1 items-center rounded-[22px] bg-[var(--surface-subtle)] px-5 text-sm text-[var(--text-soft)] shadow-[var(--inset-shadow)] sm:text-base">
-                  Cerca per nome, presidio, disponibilita, stato o ultimo turno assegnato.
-                </div>
-                <div className="flex flex-wrap gap-2.5">
-                  {[
-                    "Solo attivi",
-                    "Turni scoperti",
-                    "Ultimi inseriti",
-                    "Disponibili weekend",
-                  ].map((chip) => (
-                    <button
-                      key={chip}
-                      type="button"
-                      className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-[var(--text-soft)] shadow-[var(--panel-shadow)] ring-1 ring-[var(--border-subtle)] transition hover:-translate-y-0.5 hover:ring-[var(--brand-red)]"
-                    >
-                      {chip}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex min-h-[440px] flex-1 flex-col rounded-[34px] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(244,236,226,0.96))] p-5 shadow-[var(--panel-shadow)] ring-1 ring-white/70 sm:min-h-[500px] lg:p-6">
-              <div className="flex flex-col gap-4 border-b border-[var(--border-subtle)] pb-5 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-[var(--brand-red)]">
-                    Elenco volontari
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text-strong)] sm:text-3xl">
-                    Workspace tabellare pronto per dati reali e azioni contestuali.
-                  </h2>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="rounded-full bg-[var(--brand-red-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--brand-red)]">
-                    64 profili filtrati
-                  </span>
-                  <button
-                    type="button"
-                    className="rounded-full bg-[var(--text-strong)] px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--panel-shadow)] transition hover:-translate-y-0.5"
-                  >
-                    Nuovo volontario
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-4 xl:grid-cols-[1.45fr_0.8fr]">
-                <div className="overflow-hidden rounded-[28px] bg-white shadow-[var(--panel-shadow)] ring-1 ring-[var(--border-subtle)]">
-                  <div className="grid grid-cols-[1.2fr_1fr_1fr_auto] gap-3 border-b border-[var(--border-subtle)] px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
-                    <span>Volontario</span>
-                    <span>Area</span>
-                    <span>Turno</span>
-                    <span>Stato</span>
-                  </div>
-                  <div>
-                    {rosterPreview.map((row) => (
-                      <div
-                        key={row.name}
-                        className="grid grid-cols-[1.2fr_1fr_1fr_auto] items-center gap-3 border-b border-[var(--border-subtle)] px-5 py-4 last:border-b-0"
-                      >
-                        <div>
-                          <p className="font-semibold text-[var(--text-strong)]">{row.name}</p>
-                          <p className="mt-1 text-sm text-[var(--text-muted)]">Ultimo accesso 2h fa</p>
-                        </div>
-                        <p className="text-sm font-medium text-[var(--text-soft)]">{row.area}</p>
-                        <p className="text-sm font-medium text-[var(--text-soft)]">{row.shift}</p>
-                        <span
-                          className={`rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${
-                            row.status === "Confermato"
-                              ? "bg-[var(--text-strong)] text-white"
-                              : row.status === "In verifica"
-                                ? "bg-[var(--brand-red-soft)] text-[var(--brand-red)]"
-                                : "bg-[var(--surface-subtle)] text-[var(--text-soft)]"
-                          }`}
-                        >
-                          {row.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="table-grid rounded-[28px] bg-[var(--surface-subtle)] p-5 shadow-[var(--inset-shadow)] ring-1 ring-[var(--border-subtle)]">
-                  <div className="rounded-[24px] bg-white/90 p-5 shadow-[var(--panel-shadow)]">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">
-                      Azioni contestuali
-                    </p>
-                    <p className="mt-3 font-[family:var(--font-display)] text-3xl leading-tight text-[var(--text-strong)]">
-                      Spazio pronto per toolbar, bulk action e stati di caricamento.
-                    </p>
-                    <p className="mt-4 text-sm leading-7 text-[var(--text-soft)]">
-                      Quando arriveranno dati reali, questa area puo ospitare selezione multipla, pannello dettaglio, skeleton e messaggi di stato senza rompere il layout.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+         
           </section>
         </div>
       </div>
