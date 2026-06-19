@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
-import { Newsreader, Source_Sans_3 } from "next/font/google";
+import { Fraunces, Sora } from "next/font/google";
 import "./globals.css";
 
-const displayFont = Newsreader({
+const displayFont = Fraunces({
   variable: "--font-display",
   subsets: ["latin"],
 });
 
-const bodyFont = Source_Sans_3({
+const bodyFont = Sora({
   variable: "--font-body",
   subsets: ["latin"],
 });
