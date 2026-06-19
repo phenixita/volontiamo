@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Redirect } from 'expo-router';
 import {
   ActivityIndicator,
   FlatList,
@@ -7,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useAuth } from '../../lib/auth';
 import { fetchEvents } from '../../lib/api';
 import { EventResponse } from '../../lib/types';
 import { colors, typography } from '../../theme';
@@ -76,6 +78,7 @@ function EventCard({ event }: { event: EventResponse }) {
 }
 
 export default function EventsScreen() {
+  const { status } = useAuth();
   const [events, setEvents] = useState<EventResponse[]>([]);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -97,9 +100,24 @@ export default function EventsScreen() {
   }, []);
 
   useEffect(() => {
+    if (status !== 'authenticated') return;
+
     setLoading(true);
     loadEvents(1, true).finally(() => setLoading(false));
-  }, [loadEvents]);
+  }, [loadEvents, status]);
+
+  if (status === 'loading') {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.brand.red} />
+        <Text style={styles.loadingText}>Apertura sessione...</Text>
+      </View>
+    );
+  }
+
+  if (status === 'unauthenticated') {
+    return <Redirect href="/" />;
+  }
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

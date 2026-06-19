@@ -1,5 +1,26 @@
 export type EventStatus = 'Draft' | 'Active' | 'Concluded';
 
+export type UserType = 0 | 1;
+
+export type AuthenticatedUser = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  isActive: boolean;
+  userType: UserType;
+};
+
+export type LoginSuccess = {
+  accessToken: string;
+  expiresAt: string;
+  user: AuthenticatedUser;
+};
+
+export type ApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; message: string; statusCode?: number };
+
 export type EventResponse = {
   id: number;
   name: string;
@@ -18,3 +39,7 @@ export type PagedResponse<T> = {
   pageSize: number;
   totalCount: number;
 };
+
+export function formatUserType(userType: UserType): string {
+  return userType === 0 ? 'Lilt' : 'Volontario';
+}

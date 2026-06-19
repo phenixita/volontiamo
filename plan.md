@@ -19,8 +19,8 @@ Introdurre autenticazione base end-to-end con email e password memorizzate sul r
 13. Aggiungere schermata/login flow web, proteggere il shell esistente e mostrare utente corrente + `UserType` in un punto stabile dell'interfaccia. [done] *Dipende da 12*
 14. Estendere la UI di gestione utenti web per impostare la password iniziale in creazione/modifica secondo il perimetro deciso. [done] *Dipende da 9,12; parallel con 13 dopo 12*
 15. Phase 4 - Mobile authenticated flow
-16. Introdurre nel client Expo un piccolo modulo auth per login, persistenza token locale, bootstrap dell'utente corrente via `/me`, e invio header Bearer nelle chiamate API esistenti. *Dipende da 7; blocca 17*
-17. Inserire una schermata/login gate iniziale al posto del redirect diretto agli eventi e mostrare nome/email/tipo dell'utente autenticato in drawer o schermata profilo minimale. *Dipende da 16*
+16. Introdurre nel client Expo un piccolo modulo auth per login, persistenza token locale, bootstrap dell'utente corrente via `/me`, e invio header Bearer nelle chiamate API esistenti. [done] *Dipende da 7; blocca 17*
+17. Inserire una schermata/login gate iniziale al posto del redirect diretto agli eventi e mostrare nome/email/tipo dell'utente autenticato in drawer o schermata profilo minimale. [done] *Dipende da 16*
 18. Phase 5 - Verification and manual walkthrough
 19. Validare in ordine: test L0 dominio, test L1 API, smoke test manuale web, smoke test manuale mobile, prova Postman con seed login -> create user -> login nuovo utente -> `/me`. *Dipende da 4,10,13-17*
 
