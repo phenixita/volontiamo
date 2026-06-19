@@ -1,0 +1,8 @@
+// settings.json
+{
+    // Optional: Hide files from explorer (may affect context)
+    "files.exclude": {
+        "**/node_modules": true,
+        "**/dist": true
+    }
+}

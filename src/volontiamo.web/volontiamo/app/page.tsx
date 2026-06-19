@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const metrics = [
   { label: "Disponibili oggi", value: "48", tone: "warm" },
   { label: "Turni scoperti", value: "03", tone: "alert" },
@@ -38,12 +40,12 @@ export default function Home() {
                   </span>
                 </div>
                 <nav aria-label="Navigazione mobile" className="flex flex-col gap-3">
-                  <a
-                    href="#"
+                  <Link
+                    href="/users"
                     className="rounded-xl border border-[color:rgba(255,255,255,0.18)] bg-[var(--brand-red)] px-4 py-3 text-base font-semibold text-white shadow-[var(--accent-shadow)] transition hover:bg-[var(--brand-red-deep)]"
                   >
                     Volontari
-                  </a>
+                  </Link>
                 </nav>
               </div>
             </details>
@@ -110,14 +112,14 @@ export default function Home() {
               </h2>
 
               <nav aria-label="Navigazione principale" className="mt-8 flex flex-col gap-3">
-                <a
-                  href="#"
+                <Link
+                  href="/users"
                   className="rounded-xl border border-[var(--border-subtle)] bg-white px-4 py-3 text-base font-semibold text-[var(--text-strong)] shadow-[var(--panel-shadow)] transition hover:border-[var(--brand-red)] hover:bg-[var(--surface-subtle)]"
                 >
                   <span className="flex items-center justify-between gap-3">
                     Volontari
                   </span>
-                </a>
+                </Link>
               </nav>
             </div>
           </aside>
@@ -159,7 +161,25 @@ export default function Home() {
               </div>
             </div>
 
-         
+            <div className="rounded-[30px] border border-white/75 bg-white/90 p-6 shadow-[var(--panel-shadow)] ring-1 ring-white/60 sm:p-7">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-red)]">
+                Prima integrazione dati
+              </p>
+              <h2 className="mt-3 font-[family:var(--font-display)] text-4xl leading-[0.95] text-[var(--text-strong)] sm:text-5xl">
+                Apri l&apos;elenco utenti reale.
+              </h2>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--text-soft)] sm:text-base">
+                La home resta una shell introduttiva: la lettura dati ora e disponibile nella route dedicata con paginazione server-side e stati di errore/empty espliciti.
+              </p>
+              <div className="mt-6">
+                <Link
+                  href="/users"
+                  className="inline-flex items-center rounded-full bg-[var(--brand-red)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white shadow-[var(--accent-shadow)] transition hover:bg-[var(--brand-red-deep)]"
+                >
+                  Vai a Volontari
+                </Link>
+              </div>
+            </div>
           </section>
         </div>
       </div>
