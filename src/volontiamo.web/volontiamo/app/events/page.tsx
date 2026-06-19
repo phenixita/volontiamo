@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 
 import { AppShell } from "@/app/components/app-shell";
 import { deleteEventAction } from "@/app/events/actions";
+import { requireCurrentUser } from "@/lib/auth/session";
 import type { EventDto, EventsReadResult, ReadEventsInput } from "@/lib/events/contracts";
 import { readEventsPage } from "@/lib/events/http-events-adapter";
 
@@ -103,6 +104,10 @@ export default async function EventsPage({ searchParams }: EventsPageProps) {
   const page = parsePositiveInt(readFirstQueryValue(query.page), DEFAULT_PAGE);
   const pageSize = clampPageSize(parsePositiveInt(readFirstQueryValue(query.pageSize), DEFAULT_PAGE_SIZE));
   const error = readFirstQueryValue(query.error);
+  const currentUserResult = await requireCurrentUser();
+  if (!currentUserResult.ok) {
+    return renderErrorState(currentUserResult);
+  }
 
   const eventsResult = await readEventsPage({ name, status, page, pageSize });
   const activePage = eventsResult.ok ? eventsResult.data.page : page;
@@ -113,7 +118,7 @@ export default async function EventsPage({ searchParams }: EventsPageProps) {
   const rangeEnd = totalCount === 0 ? 0 : Math.min(totalCount, activePage * activePageSize);
 
   return (
-    <AppShell activePath="/events" title="Eventi" eyebrow="/events" badge={`pagina ${activePage}`}>
+    <AppShell activePath="/events" title="Eventi" eyebrow="/events" currentUser={currentUserResult.data} badge={`pagina ${activePage}`}>
       <div className="flex flex-col gap-3 rounded-[30px] border border-white/75 bg-white/92 p-5 shadow-[var(--panel-shadow)] ring-1 ring-white/60 lg:flex-row lg:items-end lg:justify-between">
         <form action="/events" className="grid flex-1 gap-3 md:grid-cols-[minmax(180px,1fr)_180px_120px_auto] md:items-end">
           <label className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">

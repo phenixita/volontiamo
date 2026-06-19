@@ -1,8 +1,10 @@
 import Link from "next/link";
 
 import { AppShell } from "@/app/components/app-shell";
-import type { VolunteerDto, VolunteersReadResult } from "@/lib/users/contracts";
-import { readVolunteersPage } from "@/lib/users/http-users-adapter";
+import { formatUserType } from "@/lib/auth/contracts";
+import { requireCurrentUser } from "@/lib/auth/session";
+import type { UserDto, UsersReadResult } from "@/lib/users/contracts";
+import { readUsersPage } from "@/lib/users/http-users-adapter";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 10;
@@ -40,12 +42,12 @@ function clampPageSize(value: number): number {
   return Math.min(value, MAX_PAGE_SIZE);
 }
 
-function formatFullName(user: VolunteerDto): string {
+function formatFullName(user: UserDto): string {
   const fullName = `${user.firstName} ${user.lastName}`.trim();
   return fullName.length > 0 ? fullName : "Nome non disponibile";
 }
 
-function buildVolunteersHref(page: number, pageSize: number): string {
+function buildUsersHref(page: number, pageSize: number): string {
   const params = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
@@ -54,14 +56,14 @@ function buildVolunteersHref(page: number, pageSize: number): string {
   return `/users?${params.toString()}`;
 }
 
-function renderErrorState(error: Extract<VolunteersReadResult, { ok: false }>) {
+function renderErrorState(error: Extract<UsersReadResult, { ok: false }>) {
   return (
     <div className="rounded-[30px] border border-[#f0bfc3] bg-[#fff6f7] p-6 shadow-[var(--panel-shadow)] sm:p-7">
       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-red)]">
-        Errore GET volontari
+        Errore GET utenti
       </p>
       <h2 className="mt-3 font-[family:var(--font-display)] text-4xl leading-[0.94] text-[var(--text-strong)] sm:text-[2.85rem]">
-        Non riesco a caricare l&apos;elenco volontari.
+        Non riesco a caricare l&apos;elenco utenti.
       </h2>
       <p className="mt-4 max-w-3xl text-sm leading-7 text-[var(--text-soft)] sm:text-base">
         {error.message}
@@ -78,30 +80,40 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   const query = await searchParams;
   const page = parsePositiveInt(readFirstQueryValue(query.page), DEFAULT_PAGE);
   const pageSize = clampPageSize(parsePositiveInt(readFirstQueryValue(query.pageSize), DEFAULT_PAGE_SIZE));
+  const currentUserResult = await requireCurrentUser();
+  if (!currentUserResult.ok) {
+    return renderErrorState(currentUserResult);
+  }
 
-  const volunteersResult = await readVolunteersPage({ page, pageSize });
+  const usersResult = await readUsersPage({ page, pageSize });
 
-  const activePage = volunteersResult.ok ? volunteersResult.data.page : page;
-  const activePageSize = volunteersResult.ok ? volunteersResult.data.pageSize : pageSize;
-  const totalCount = volunteersResult.ok ? volunteersResult.data.totalCount : 0;
-  const totalPages = volunteersResult.ok && totalCount > 0 ? Math.ceil(totalCount / Math.max(1, activePageSize)) : 1;
+  const activePage = usersResult.ok ? usersResult.data.page : page;
+  const activePageSize = usersResult.ok ? usersResult.data.pageSize : pageSize;
+  const totalCount = usersResult.ok ? usersResult.data.totalCount : 0;
+  const totalPages = usersResult.ok && totalCount > 0 ? Math.ceil(totalCount / Math.max(1, activePageSize)) : 1;
   const hasPreviousPage = activePage > 1;
-  const hasNextPage = volunteersResult.ok && activePage < totalPages;
+  const hasNextPage = usersResult.ok && activePage < totalPages;
 
   const rangeStart = totalCount === 0 ? 0 : (activePage - 1) * activePageSize + 1;
   const rangeEnd = totalCount === 0 ? 0 : Math.min(totalCount, activePage * activePageSize);
 
   return (
-    <AppShell activePath="/users" title="Volontari" eyebrow="/users" badge={`pagina ${activePage}`}>
-      {!volunteersResult.ok ? (
-        renderErrorState(volunteersResult)
-      ) : volunteersResult.data.items.length === 0 ? (
+    <AppShell activePath="/users" title="Utenti" eyebrow="/users" currentUser={currentUserResult.data} badge={`pagina ${activePage}`}>
+      <div className="flex justify-end">
+        <Link href="/users/new" className="inline-flex justify-center rounded-full bg-[var(--text-strong)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white shadow-[var(--panel-shadow)] transition hover:-translate-y-0.5">
+          Nuovo utente
+        </Link>
+      </div>
+
+      {!usersResult.ok ? (
+        renderErrorState(usersResult)
+      ) : usersResult.data.items.length === 0 ? (
         <div className="rounded-[30px] border border-white/80 bg-white/90 p-6 shadow-[var(--panel-shadow)] sm:p-7">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-red)]">
             Nessun risultato
           </p>
           <h2 className="mt-3 font-[family:var(--font-display)] text-4xl leading-[0.96] text-[var(--text-strong)] sm:text-[2.85rem]">
-            Nessun volontario nella pagina richiesta.
+            Nessun utente nella pagina richiesta.
           </h2>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--text-soft)] sm:text-base">
             Prova a cambiare pagina o page size dalla query string per riallinearti ai dati presenti nel backend.
@@ -125,10 +137,16 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                   <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
                     Stato
                   </th>
+                  <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                    Tipo
+                  </th>
+                  <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                    Azioni
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {volunteersResult.data.items.map((user) => (
+                {usersResult.data.items.map((user) => (
                   <tr key={user.id} className="border-b border-[var(--border-subtle)]/70 last:border-b-0">
                     <td className="px-3 py-4 text-sm font-semibold text-[var(--text-strong)]">
                       {formatFullName(user)}
@@ -146,6 +164,12 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                         {user.isActive ? "Attivo" : "Inattivo"}
                       </span>
                     </td>
+                    <td className="px-3 py-4 text-sm text-[var(--text-soft)]">{formatUserType(user.userType)}</td>
+                    <td className="px-3 py-4 text-sm">
+                      <Link href={`/users/${user.id}`} className="rounded-full border border-[var(--border-subtle)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
+                        Modifica
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -159,7 +183,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
             <div className="flex items-center gap-2">
               {hasPreviousPage ? (
                 <Link
-                  href={buildVolunteersHref(activePage - 1, activePageSize)}
+                  href={buildUsersHref(activePage - 1, activePageSize)}
                   className="rounded-full border border-[var(--border-subtle)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]"
                 >
                   Precedente
@@ -176,7 +200,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
 
               {hasNextPage ? (
                 <Link
-                  href={buildVolunteersHref(activePage + 1, activePageSize)}
+                  href={buildUsersHref(activePage + 1, activePageSize)}
                   className="rounded-full border border-[var(--border-subtle)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]"
                 >
                   Successiva

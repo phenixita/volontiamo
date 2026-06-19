@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AppShell } from "@/app/components/app-shell";
+import { requireCurrentUser } from "@/lib/auth/session";
 
 const metrics = [
   { label: "Disponibili oggi", value: "48", tone: "warm" },
@@ -8,9 +9,24 @@ const metrics = [
   { label: "Nuovi ingressi", value: "12", tone: "calm" },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const currentUserResult = await requireCurrentUser();
+  if (!currentUserResult.ok) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-4 py-10">
+        <div className="w-full max-w-[560px] rounded-[30px] border border-[#f0bfc3] bg-[#fff6f7] p-6 shadow-[var(--panel-shadow)] sm:p-7">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-red)]">Sessione</p>
+          <h1 className="mt-3 font-[family:var(--font-display)] text-4xl leading-[0.96] text-[var(--text-strong)]">
+            Accesso non disponibile.
+          </h1>
+          <p className="mt-4 text-sm leading-7 text-[var(--text-soft)]">{currentUserResult.message}</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <AppShell activePath="/" title="Volontiamo" eyebrow="Dashboard">
+    <AppShell activePath="/" title="Volontiamo" eyebrow="Dashboard" currentUser={currentUserResult.data}>
       <div className="rounded-[34px] bg-[linear-gradient(135deg,rgba(47,42,40,0.98),rgba(87,74,67,0.94))] px-6 py-6 text-white shadow-[var(--panel-shadow)] sm:px-7 lg:px-8 lg:py-8">
         <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">

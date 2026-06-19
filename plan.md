@@ -1,8 +1,9 @@
-## Interview: Basic Authentication POC
+# Interview: Basic Authentication POC
 
 Introdurre autenticazione base end-to-end con email e password memorizzate sul record `User`, token Bearer semplice, `POST /login` pubblico, resto delle API autenticato, ruolo `UserType` solo informativo (`Lilt` o `Volontario`) senza autorizzazioni differenziate. Bootstrap con seed development iniziale; gestione utenti e password iniziale anche da web app; mobile e web devono mostrare l'utente autenticato e il suo tipo.
 
-**Steps**
+## Steps
+
 1. Phase 1 - Domain contract and tests [done]
 2. Estendere `User` per contenere i dati minimi di autenticazione nel dominio: identificativo di login = `Email`, hash password, eventuale stato coerente con `IsActive`; mantenere `UserType` invariato come enum a 2 valori. [done] *Blocca 3-8*
 3. Estendere i contratti di dominio in `UserService` per supportare creazione utente con password iniziale e lettura del profilo senza esporre hash password; aggiungere un modulo dedicato all'autenticazione (`Authenticate`, `GetCurrentUser`) con interfaccia piccola e profonda. [done] *Blocca 4-8*
@@ -14,16 +15,17 @@ Introdurre autenticazione base end-to-end con email e password memorizzate sul r
 9. Estendere `POST /api/v1/users` e `PUT /api/v1/users/{id}` per gestire la password iniziale/aggiornamento minimo richiesto dalla POC senza introdurre reset/forgot password. [done] *Dipende da 3,6,7*
 10. Scrivere/aggiornare test L1 API per login, `/me`, protezione degli endpoint esistenti, seed development e creazione utente con password. [done] *Dipende da 6-9*
 11. Phase 3 - Web authenticated flow
-12. Introdurre nel frontend Next.js un adapter auth HTTP dedicato, con storage della sessione Bearer sul lato appropriato dell'app, bootstrap dell'utente corrente via `/me`, e propagazione del token alle chiamate `users` ed `events`. *Dipende da 7; blocca 13-14*
-13. Aggiungere schermata/login flow web, proteggere il shell esistente e mostrare utente corrente + `UserType` in un punto stabile dell'interfaccia. *Dipende da 12*
-14. Estendere la UI di gestione utenti web per impostare la password iniziale in creazione/modifica secondo il perimetro deciso. *Dipende da 9,12; parallel con 13 dopo 12*
+12. Introdurre nel frontend Next.js un adapter auth HTTP dedicato, con storage della sessione Bearer sul lato appropriato dell'app, bootstrap dell'utente corrente via `/me`, e propagazione del token alle chiamate `users` ed `events`. [done] *Dipende da 7; blocca 13-14*
+13. Aggiungere schermata/login flow web, proteggere il shell esistente e mostrare utente corrente + `UserType` in un punto stabile dell'interfaccia. [done] *Dipende da 12*
+14. Estendere la UI di gestione utenti web per impostare la password iniziale in creazione/modifica secondo il perimetro deciso. [done] *Dipende da 9,12; parallel con 13 dopo 12*
 15. Phase 4 - Mobile authenticated flow
 16. Introdurre nel client Expo un piccolo modulo auth per login, persistenza token locale, bootstrap dell'utente corrente via `/me`, e invio header Bearer nelle chiamate API esistenti. *Dipende da 7; blocca 17*
 17. Inserire una schermata/login gate iniziale al posto del redirect diretto agli eventi e mostrare nome/email/tipo dell'utente autenticato in drawer o schermata profilo minimale. *Dipende da 16*
 18. Phase 5 - Verification and manual walkthrough
 19. Validare in ordine: test L0 dominio, test L1 API, smoke test manuale web, smoke test manuale mobile, prova Postman con seed login -> create user -> login nuovo utente -> `/me`. *Dipende da 4,10,13-17*
 
-**Relevant files**
+## Relevant files
+
 - `c:\dev\volontiamo\src\volontiamo.domain\User.cs` — estendere aggregate `User` con stato credenziali mantenendo il dominio utente come seam principale
 - `c:\dev\volontiamo\src\volontiamo.domain\UserService.cs` — riusare pattern `CreateAsync`/`UpdateAsync` e aggiungere contratti senza esporre dettagli persistence
 - `c:\dev\volontiamo\src\volontiamo.domain\IUserRepository.cs` — ampliare le query necessarie per lookup autenticazione per email
@@ -47,14 +49,16 @@ Introdurre autenticazione base end-to-end con email e password memorizzate sul r
 - `c:\dev\volontiamo\src\volontiamo.mobile\volontiamo\app\index.tsx` — sostituire redirect diretto con gate login/sessione
 - `c:\dev\volontiamo\src\volontiamo.mobile\volontiamo\app\` — aggiungere schermata login e punto UI per identità corrente
 
-**Verification**
+## Verification
+
 1. Eseguire i test L0 da `c:\dev\volontiamo`: `dotnet test .\src\volontiamo.domain.test.L0\volontiamo.domain.test.L0.csproj`
 2. Eseguire i test L1 da `c:\dev\volontiamo`: `dotnet test .\src\volontiamo.api.tests.L1\volontiamo.api.tests.L1.csproj`
 3. Avviare l'API in development e verificare con Postman: login dell'utente seed, `GET /api/v1/auth/me`, `GET /api/v1/events` con Bearer, `POST /api/v1/users` con password iniziale e nuovo login con quell'utente
 4. Avviare la web app e verificare: redirect a login, login con utente seed, shell caricata, nome/email/tipo visibili, chiamate a `users/events` funzionanti con token
 5. Avviare Expo mobile e verificare: login iniziale, persistenza sessione, fetch eventi autenticato, visualizzazione utente corrente e tipo
 
-**Decisions**
+## Decisions
+
 - Credenziali dentro `User`, non account separato
 - Tipi utente in POC: solo `Lilt` e `Volontario`, mutuamente esclusivi
 - Identificativo login: `Email`
@@ -68,7 +72,8 @@ Introdurre autenticazione base end-to-end con email e password memorizzate sul r
 - Scope incluso: dominio, API, persistence, test L0/L1, login web, login mobile, visualizzazione utente corrente
 - Scope escluso: permessi per ruolo, recupero password, MFA, refresh token, provider esterni, auditing sicurezza avanzato
 
-**Rationale**
+## Rationale
+
 - Tenere l'auth come piccolo modulo dedicato dietro interfacce di dominio evita che `volontiamo.api` assorba logica di business
 - Usare `/me` evita di accoppiare web/mobile al formato del token e rende il bootstrap UI più stabile
 - Il seed development è il modo più coerente per mantenere protetto `POST /users` senza introdurre eccezioni di bootstrap permanenti

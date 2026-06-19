@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { AppShell } from "@/app/components/app-shell";
 import { createEventAction } from "@/app/events/actions";
+import { requireCurrentUser } from "@/lib/auth/session";
 
 type NewEventPageProps = {
   searchParams: Promise<{ error?: string | string[] }>;
@@ -12,11 +13,16 @@ function readFirstQueryValue(value: string | string[] | undefined): string | und
 }
 
 export default async function NewEventPage({ searchParams }: NewEventPageProps) {
+  const currentUserResult = await requireCurrentUser();
+  if (!currentUserResult.ok) {
+    return <div className="p-6 text-sm text-[var(--brand-red)]">{currentUserResult.message}</div>;
+  }
+
   const query = await searchParams;
   const error = readFirstQueryValue(query.error);
 
   return (
-    <AppShell activePath="/events" title="Nuovo evento" eyebrow="/events/new" badge="creazione">
+    <AppShell activePath="/events" title="Nuovo evento" eyebrow="/events/new" currentUser={currentUserResult.data} badge="creazione">
       <div className="rounded-[30px] border border-white/75 bg-white/92 p-6 shadow-[var(--panel-shadow)] ring-1 ring-white/60 sm:p-7">
         <div className="flex flex-col gap-3 border-b border-[var(--border-subtle)] pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div>

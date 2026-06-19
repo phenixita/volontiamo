@@ -1,16 +1,21 @@
 import Link from "next/link";
 
+import { logoutAction } from "@/app/login/actions";
+import type { AuthenticatedUserDto } from "@/lib/auth/contracts";
+import { formatUserType } from "@/lib/auth/contracts";
+
 type AppShellProps = {
   activePath: "/" | "/users" | "/events";
   title: string;
   eyebrow: string;
+  currentUser: AuthenticatedUserDto;
   badge?: string;
   children: React.ReactNode;
 };
 
 const navItems = [
   { href: "/", label: "Home" },
-  { href: "/users", label: "Volontari" },
+  { href: "/users", label: "Utenti" },
   { href: "/events", label: "Eventi" },
 ] as const;
 
@@ -20,7 +25,12 @@ function navClass(isActive: boolean): string {
     : "rounded-xl border border-[var(--border-subtle)] bg-white px-4 py-3 text-base font-semibold text-[var(--text-soft)] shadow-[var(--panel-shadow)] transition hover:border-[var(--brand-red)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-strong)]";
 }
 
-export function AppShell({ activePath, title, eyebrow, badge, children }: AppShellProps) {
+function formatFullName(user: AuthenticatedUserDto): string {
+  const fullName = `${user.firstName} ${user.lastName}`.trim();
+  return fullName || user.email;
+}
+
+export function AppShell({ activePath, title, eyebrow, currentUser, badge, children }: AppShellProps) {
   const activeItem = navItems.find((item) => item.href === activePath) ?? navItems[0];
 
   return (
@@ -86,11 +96,27 @@ export function AppShell({ activePath, title, eyebrow, badge, children }: AppShe
                 </div>
               </div>
 
-              {badge ? (
-                <div className="self-end rounded-full bg-white/88 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-soft)] shadow-[var(--panel-shadow)] lg:self-auto">
-                  {badge}
+              <div className="flex flex-col items-end gap-2 self-end lg:self-auto">
+                <div className="rounded-[22px] border border-white/75 bg-white/88 px-4 py-3 text-right shadow-[var(--panel-shadow)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-red)]">
+                    {formatUserType(currentUser.userType)}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-[var(--text-strong)]">{formatFullName(currentUser)}</p>
+                  <p className="mt-1 max-w-[260px] truncate text-xs text-[var(--text-muted)]">{currentUser.email}</p>
                 </div>
-              ) : null}
+                <div className="flex flex-wrap justify-end gap-2">
+                  {badge ? (
+                    <div className="rounded-full bg-white/88 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-soft)] shadow-[var(--panel-shadow)]">
+                      {badge}
+                    </div>
+                  ) : null}
+                  <form action={logoutAction}>
+                    <button type="submit" className="rounded-full border border-[var(--border-subtle)] bg-white/88 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-soft)] shadow-[var(--panel-shadow)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
+                      Esci
+                    </button>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
         </header>

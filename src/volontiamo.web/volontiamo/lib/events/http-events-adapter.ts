@@ -9,40 +9,11 @@ import type {
   PagedResponse,
   ReadEventsInput,
 } from "@/lib/events/contracts";
+import { readSessionToken } from "@/lib/auth/session";
+import { isRecord, readApiBaseUrl, readHttpErrorMessage } from "@/lib/http";
 
 const EVENTS_ROUTE = "/api/v1/events";
 const REQUEST_TIMEOUT_MS = 10_000;
-
-function readEventsApiBaseUrl(): { ok: true; value: URL } | { ok: false; message: string } {
-  const baseUrlRaw = process.env.VOLONTIAMO_API_BASE_URL;
-  if (!baseUrlRaw) {
-    return {
-      ok: false,
-      message: "Variabile VOLONTIAMO_API_BASE_URL assente. Configura il backend base URL nel frontend.",
-    };
-  }
-
-  try {
-    const parsed = new URL(baseUrlRaw);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return {
-        ok: false,
-        message: "VOLONTIAMO_API_BASE_URL deve usare protocollo http:// o https://.",
-      };
-    }
-
-    return { ok: true, value: parsed };
-  } catch {
-    return {
-      ok: false,
-      message: "VOLONTIAMO_API_BASE_URL non e un URL valido.",
-    };
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 function isEventStatus(value: unknown): value is EventStatus {
   return value === 0 || value === 1 || value === 2;
@@ -83,37 +54,6 @@ function isEventsPageEnvelope(value: unknown): value is PagedResponse<EventDto> 
   return value.items.every((item) => isApiEventDto(item));
 }
 
-async function readHttpErrorMessage(response: Response): Promise<string | null> {
-  const contentType = response.headers.get("content-type") ?? "";
-
-  try {
-    if (contentType.includes("application/json")) {
-      const payload = await response.json();
-      if (isRecord(payload)) {
-        const detail = payload.detail;
-        const title = payload.title;
-
-        if (typeof detail === "string" && detail.length > 0) {
-          return detail;
-        }
-
-        if (typeof title === "string" && title.length > 0) {
-          return title;
-        }
-      }
-    } else {
-      const text = (await response.text()).trim();
-      if (text.length > 0) {
-        return text;
-      }
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
 function eventStatusToQuery(status: ReadEventsInput["status"]): string | null {
   switch (status) {
     case "draft":
@@ -127,9 +67,14 @@ function eventStatusToQuery(status: ReadEventsInput["status"]): string | null {
 }
 
 export async function readEventsPage(input: ReadEventsInput): Promise<EventsReadResult> {
-  const baseUrlResult = readEventsApiBaseUrl();
+  const baseUrlResult = readApiBaseUrl();
   if (!baseUrlResult.ok) {
     return { ok: false, kind: "configuration", message: baseUrlResult.message };
+  }
+
+  const token = await readSessionToken();
+  if (!token) {
+    return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
   }
 
   const url = new URL(EVENTS_ROUTE, baseUrlResult.value);
@@ -151,7 +96,7 @@ export async function readEventsPage(input: ReadEventsInput): Promise<EventsRead
       method: "GET",
       cache: "no-store",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
     });
   } catch {
     return {
@@ -187,9 +132,14 @@ export async function readEventsPage(input: ReadEventsInput): Promise<EventsRead
 }
 
 export async function createEvent(input: CreateEventInput): Promise<EventMutationResult> {
-  const baseUrlResult = readEventsApiBaseUrl();
+  const baseUrlResult = readApiBaseUrl();
   if (!baseUrlResult.ok) {
     return { ok: false, kind: "configuration", message: baseUrlResult.message };
+  }
+
+  const token = await readSessionToken();
+  if (!token) {
+    return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
   }
 
   const url = new URL(EVENTS_ROUTE, baseUrlResult.value);
@@ -199,7 +149,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventMutatio
       method: "POST",
       cache: "no-store",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(input),
     });
   } catch {
@@ -221,9 +171,14 @@ export async function createEvent(input: CreateEventInput): Promise<EventMutatio
 }
 
 export async function deleteEvent(id: number): Promise<EventMutationResult> {
-  const baseUrlResult = readEventsApiBaseUrl();
+  const baseUrlResult = readApiBaseUrl();
   if (!baseUrlResult.ok) {
     return { ok: false, kind: "configuration", message: baseUrlResult.message };
+  }
+
+  const token = await readSessionToken();
+  if (!token) {
+    return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
   }
 
   const url = new URL(`${EVENTS_ROUTE}/${id}`, baseUrlResult.value);
@@ -233,6 +188,7 @@ export async function deleteEvent(id: number): Promise<EventMutationResult> {
       method: "DELETE",
       cache: "no-store",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      headers: { Authorization: `Bearer ${token}` },
     });
   } catch {
     return { ok: false, kind: "network", message: "Backend non raggiungibile durante la cancellazione evento." };
