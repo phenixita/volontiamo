@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Redirect } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,37 +9,22 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useAuth } from '../../lib/auth';
-import { fetchMyEvents, setEventParticipation } from '../../lib/api';
-import { ParticipantEventListView, ParticipantEventResponse, ParticipationStatus } from '../../lib/types';
-import { colors, typography } from '../../theme';
+import { useAuth } from '../../../lib/auth';
+import { fetchMyEvents, setEventParticipation } from '../../../lib/api';
+import { ParticipantEventListView, ParticipantEventResponse, ParticipationStatus } from '../../../lib/types';
+import { formatEventDate, formatEventTime } from '../../../lib/datetime';
+import { colors, typography } from '../../../theme';
 
 const PAGE_SIZE = 15;
-
-function formatDate(isoDate: string): string {
-  const date = new Date(isoDate);
-  return date.toLocaleDateString('it-IT', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-function formatTime(isoDate: string): string {
-  const date = new Date(isoDate);
-  return date.toLocaleTimeString('it-IT', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 type EventCardProps = {
   event: ParticipantEventResponse;
   isUpdating: boolean;
   onSetParticipation: (eventId: number, status: ParticipationStatus) => void;
+  onShowDetails: (event: ParticipantEventResponse) => void;
 };
 
-function EventCard({ event, isUpdating, onSetParticipation }: EventCardProps) {
+function EventCard({ event, isUpdating, onSetParticipation, onShowDetails }: EventCardProps) {
   const acceptedSelected = event.participationStatus === 'Accepted';
   const refusedSelected = event.participationStatus === 'Refused';
 
@@ -55,7 +40,7 @@ function EventCard({ event, isUpdating, onSetParticipation }: EventCardProps) {
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>📅</Text>
           <Text style={styles.detailValue}>
-            {formatDate(event.startAtUtc)} · {formatTime(event.startAtUtc)} – {formatTime(event.endAtUtc)}
+            {formatEventDate(event.startAtUtc)} · {formatEventTime(event.startAtUtc)} – {formatEventTime(event.endAtUtc)}
           </Text>
         </View>
 
@@ -106,12 +91,21 @@ function EventCard({ event, isUpdating, onSetParticipation }: EventCardProps) {
           )}
         </Pressable>
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => onShowDetails(event)}
+        style={({ pressed }) => [styles.detailsButton, pressed && styles.detailsButtonPressed]}
+      >
+        <Text style={styles.detailsButtonText}>DETTAGLI →</Text>
+      </Pressable>
     </View>
   );
 }
 
 export default function EventsScreen() {
   const { status } = useAuth();
+  const router = useRouter();
   const [view, setView] = useState<ParticipantEventListView>('available');
   const [events, setEvents] = useState<ParticipantEventResponse[]>([]);
   const [page, setPage] = useState(1);
@@ -189,6 +183,13 @@ export default function EventsScreen() {
     setEvents(prev => prev.map(event => event.id === eventId ? result.data : event));
   }, [view]);
 
+  const handleShowDetails = useCallback((event: ParticipantEventResponse) => {
+    router.push({
+      pathname: '/(drawer)/events/[id]',
+      params: { id: String(event.id), event: JSON.stringify(event) },
+    });
+  }, [router]);
+
   const renderHeader = useCallback(() => (
     <View style={styles.header}>
       <Pressable
@@ -250,6 +251,7 @@ export default function EventsScreen() {
           event={item}
           isUpdating={updatingIds.has(item.id)}
           onSetParticipation={handleSetParticipation}
+          onShowDetails={handleShowDetails}
         />
       )}
       contentContainerStyle={styles.list}
@@ -413,6 +415,24 @@ const styles = StyleSheet.create({
   },
   actionTextSelected: {
     color: colors.brand.red,
+  },
+  detailsButton: {
+    marginTop: 10,
+    minHeight: 42,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    backgroundColor: colors.brand.red,
+  },
+  detailsButtonPressed: {
+    opacity: 0.85,
+  },
+  detailsButtonText: {
+    ...typography.bodySmall,
+    color: colors.text.inverse,
+    fontWeight: '700',
+    letterSpacing: 0.6,
   },
   centered: {
     flex: 1,

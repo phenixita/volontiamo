@@ -56,6 +56,7 @@ function AppDrawer() {
           options={{
             drawerLabel: 'Eventi',
             title: 'Eventi',
+            headerShown: false,
           }}
         />
         <Drawer.Screen
