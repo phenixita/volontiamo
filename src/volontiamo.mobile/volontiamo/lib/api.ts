@@ -10,11 +10,39 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.endsWith(API_PREFIX) ? baseUrl : `${baseUrl}${API_PREFIX}`;
 }
 
+function stripTrailingSlash(value: string): string {
+  return value.endsWith('/') ? value.slice(0, -1) : value;
+}
+
+function normalizeConfiguredHost(baseUrl: string): string {
+  if (Platform.OS !== 'android') {
+    return stripTrailingSlash(baseUrl);
+  }
+
+  try {
+    const url = new URL(baseUrl);
+
+    if (['localhost', '127.0.0.1', '0.0.0.0'].includes(url.hostname)) {
+      url.hostname = '10.0.2.2';
+    }
+
+    return stripTrailingSlash(url.toString());
+  } catch {
+    return stripTrailingSlash(baseUrl);
+  }
+}
+
 function resolveConfiguredBaseUrl(): string | null {
+  const envBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+
+  if (typeof envBaseUrl === 'string' && envBaseUrl.length > 0) {
+    return normalizeBaseUrl(normalizeConfiguredHost(envBaseUrl));
+  }
+
   const configuredBaseUrl = Constants.expoConfig?.extra?.apiBaseUrl;
 
   if (typeof configuredBaseUrl === 'string' && configuredBaseUrl.length > 0) {
-    return normalizeBaseUrl(configuredBaseUrl);
+    return normalizeBaseUrl(normalizeConfiguredHost(configuredBaseUrl));
   }
 
   return null;

@@ -3,6 +3,8 @@
 - Monolite modulare
 - volontiamo.api è solo per esporre endpoint REST, non deve contenere logica di business
 - volontiamo.domain contiene dominio applicativo, entità, logica di business e regole di validazione...
+- volontiamo.mobile è un client mobile React Native DEDICATO IN MODO ESCLUSIVO AL VOLONTARIO
+- volontiamo.web è un client web dedicato alla gestione di backoffice e amministrazione dedicato al personale LILT
 - Hai a disposizione Docker
 - Test driven developer is THE KEY TO SUCCESS!!! USE IT!!!
 - Le cose devono essere testate e sviluppate col livello di test più basso possibile (unit test) e solo se non è possibile fare unit test si passa a integration test.
