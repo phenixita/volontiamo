@@ -12,7 +12,7 @@ public class EventRepository : IEventRepository
     public async Task<Event?> GetByIdAsync(int id, CancellationToken ct = default)
         => await _db.Events.FirstOrDefaultAsync(e => e.Id == id, ct);
 
-    public async Task<PagedResult<Event>> ListAsync(EventListFilter filter, int page, int pageSize, CancellationToken ct = default)
+    public async Task<PagedResult<EventListItem>> ListAsync(EventListFilter filter, int page, int pageSize, CancellationToken ct = default)
     {
         var query = _db.Events.AsQueryable();
 
@@ -33,9 +33,37 @@ public class EventRepository : IEventRepository
             .ThenBy(e => e.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Select(eventItem => new EventListItem(
+                eventItem,
+                _db.EventParticipations.Count(participation =>
+                    participation.EventId == eventItem.Id
+                    && participation.Status == EventParticipationStatus.Accepted)))
             .ToListAsync(ct);
 
-        return new PagedResult<Event>(items, totalCount);
+        return new PagedResult<EventListItem>(items, totalCount);
+    }
+
+    public async Task<EventDetailItem?> GetDetailByIdAsync(int id, CancellationToken ct = default)
+    {
+        var eventItem = await _db.Events.FirstOrDefaultAsync(e => e.Id == id, ct);
+        if (eventItem is null)
+            return null;
+
+        var acceptedParticipants = await (
+            from participation in _db.EventParticipations
+            join user in _db.Users on participation.UserId equals user.Id
+            where participation.EventId == id
+               && participation.Status == EventParticipationStatus.Accepted
+            orderby user.LastName, user.FirstName
+            select new EventAcceptedParticipant(
+                user.Id,
+                user.FirstName,
+                user.LastName,
+                user.Email,
+                user.Phone)
+        ).ToListAsync(ct);
+
+        return new EventDetailItem(eventItem, acceptedParticipants);
     }
 
     public async Task<PagedResult<ParticipantEventListItem>> ListParticipantEventsAsync(ParticipantEventListFilter filter, int page, int pageSize, CancellationToken ct = default)

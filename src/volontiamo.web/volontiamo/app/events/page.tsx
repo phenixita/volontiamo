@@ -2,7 +2,6 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 
 import { AppShell } from "@/app/components/app-shell";
-import { deleteEventAction } from "@/app/events/actions";
 import { requireCurrentUser } from "@/lib/auth/session";
 import type { EventDto, EventsReadResult, ReadEventsInput } from "@/lib/events/contracts";
 import { readEventsPage } from "@/lib/events/http-events-adapter";
@@ -165,21 +164,27 @@ export default async function EventsPage({ searchParams }: EventsPageProps) {
       ) : (
         <div className="rounded-[30px] border border-white/75 bg-white/92 p-4 shadow-[var(--panel-shadow)] ring-1 ring-white/60 sm:p-6">
           <div className="overflow-x-auto">
-            <table className="min-w-[980px] border-collapse">
+            <table className="min-w-[960px] border-collapse">
               <thead>
                 <tr className="border-b border-[var(--border-subtle)] text-left">
+                  <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">ID</th>
                   <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Evento</th>
                   <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Periodo</th>
                   <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Luogo</th>
                   <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Note</th>
+                  <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Volontari</th>
                   <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Stato</th>
-                  <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Azioni</th>
                 </tr>
               </thead>
               <tbody>
                 {eventsResult.data.items.map((eventItem) => (
                   <tr key={eventItem.id} className="border-b border-[var(--border-subtle)]/70 align-top last:border-b-0">
-                    <td className="max-w-[220px] px-3 py-4 text-sm font-semibold text-[var(--text-strong)]">{eventItem.name}</td>
+                    <td className="px-3 py-4 text-sm text-[var(--text-soft)]">{eventItem.id}</td>
+                    <td className="max-w-[220px] px-3 py-4 text-sm font-semibold text-[var(--text-strong)]">
+                      <Link href={`/events/${eventItem.id}`} className="underline decoration-[var(--border-subtle)] underline-offset-4 transition hover:text-[var(--brand-red)] hover:decoration-[var(--brand-red)]">
+                        {eventItem.name}
+                      </Link>
+                    </td>
                     <td className="px-3 py-4 text-sm leading-6 text-[var(--text-soft)]">
                       <span className="block">{formatDateTime(eventItem.startAtUtc)}</span>
                       <span className="block">{formatDateTime(eventItem.endAtUtc)}</span>
@@ -190,19 +195,8 @@ export default async function EventsPage({ searchParams }: EventsPageProps) {
                         <ReactMarkdown>{eventItem.operationalNotesMarkdown || "_Nessuna nota operativa._"}</ReactMarkdown>
                       </div>
                     </td>
+                    <td className="px-3 py-4 text-sm font-semibold text-[var(--text-strong)]">{eventItem.acceptedParticipantsCount}</td>
                     <td className="px-3 py-4 text-sm"><StatusPill event={eventItem} /></td>
-                    <td className="px-3 py-4 text-sm">
-                      <details className="w-36">
-                        <summary className="cursor-pointer rounded-full border border-[var(--border-subtle)] bg-white px-4 py-2 text-center text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
-                          Elimina
-                        </summary>
-                        <form action={deleteEventAction.bind(null, eventItem.id)} className="mt-2">
-                          <button type="submit" className="w-full rounded-full bg-[var(--brand-red)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white shadow-[var(--accent-shadow)]">
-                            Conferma
-                          </button>
-                        </form>
-                      </details>
-                    </td>
                   </tr>
                 ))}
               </tbody>

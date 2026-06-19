@@ -23,7 +23,28 @@ public record EventResponse(
     string OperationalNotesMarkdown,
     EventStatus Status,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    int AcceptedParticipantsCount);
+
+public record EventVolunteerResponse(
+    Guid UserId,
+    string FirstName,
+    string LastName,
+    string Email,
+    string? Phone);
+
+public record EventDetailResponse(
+    int Id,
+    string Name,
+    DateTime StartAtUtc,
+    DateTime EndAtUtc,
+    string? Location,
+    string OperationalNotesMarkdown,
+    EventStatus Status,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    int AcceptedParticipantsCount,
+    IReadOnlyList<EventVolunteerResponse> AcceptedParticipants);
 
 public enum ParticipantEventListMode
 {
@@ -82,7 +103,7 @@ public sealed class EventService
         await _repository.AddAsync(eventItem, ct);
         await _repository.SaveChangesAsync(ct);
 
-        return Result<EventResponse>.Success(MapToResponse(eventItem));
+        return Result<EventResponse>.Success(MapToResponse(eventItem, 0));
     }
 
     public async Task<PagedResponse<EventResponse>> ListAsync(EventListRequest request, CancellationToken ct = default)
@@ -100,8 +121,17 @@ public sealed class EventService
             statuses);
 
         var result = await _repository.ListAsync(filter, page, pageSize, ct);
-        var items = result.Items.Select(MapToResponse).ToList();
+        var items = result.Items.Select(item => MapToResponse(item.Event, item.AcceptedParticipantsCount)).ToList();
         return new PagedResponse<EventResponse>(items, page, pageSize, result.TotalCount);
+    }
+
+    public async Task<Result<EventDetailResponse>> GetDetailAsync(int id, CancellationToken ct = default)
+    {
+        var detail = await _repository.GetDetailByIdAsync(id, ct);
+        if (detail is null)
+            return Result<EventDetailResponse>.NotFound();
+
+        return Result<EventDetailResponse>.Success(MapToDetailResponse(detail));
     }
 
     public async Task<Result<bool>> DeleteAsync(int id, CancellationToken ct = default)
@@ -172,7 +202,7 @@ public sealed class EventService
         return errors;
     }
 
-    private static EventResponse MapToResponse(Event eventItem)
+    private static EventResponse MapToResponse(Event eventItem, int acceptedParticipantsCount)
     {
         return new EventResponse(
             eventItem.Id,
@@ -183,7 +213,38 @@ public sealed class EventService
             eventItem.OperationalNotesMarkdown,
             eventItem.Status,
             eventItem.CreatedAt,
-            eventItem.UpdatedAt);
+            eventItem.UpdatedAt,
+            acceptedParticipantsCount);
+    }
+
+    private static EventDetailResponse MapToDetailResponse(EventDetailItem detail)
+    {
+        var acceptedParticipants = detail.AcceptedParticipants
+            .Select(MapToVolunteerResponse)
+            .ToList();
+
+        return new EventDetailResponse(
+            detail.Event.Id,
+            detail.Event.Name,
+            detail.Event.StartAtUtc,
+            detail.Event.EndAtUtc,
+            detail.Event.Location,
+            detail.Event.OperationalNotesMarkdown,
+            detail.Event.Status,
+            detail.Event.CreatedAt,
+            detail.Event.UpdatedAt,
+            acceptedParticipants.Count,
+            acceptedParticipants);
+    }
+
+    private static EventVolunteerResponse MapToVolunteerResponse(EventAcceptedParticipant participant)
+    {
+        return new EventVolunteerResponse(
+            participant.UserId,
+            participant.FirstName,
+            participant.LastName,
+            participant.Email,
+            participant.Phone);
     }
 
     private static bool IsSelectable(Event eventItem, DateTime nowUtc)

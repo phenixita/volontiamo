@@ -15,6 +15,7 @@ public static class EventEndpoints
         group.MapPost("/", CreateEvent);
         group.MapGet("/my", ListMyEvents);
         group.MapGet("/", ListEvents);
+        group.MapGet("/{id:int}", GetEventDetail);
         group.MapPut("/{id:int}/participation", SetParticipation);
         group.MapDelete("/{id:int}", DeleteEvent);
     }
@@ -88,6 +89,23 @@ public static class EventEndpoints
 
         var result = await service.ListParticipantEventsAsync(request, ct);
         return Results.Ok(result);
+    }
+
+    private static async Task<IResult> GetEventDetail(
+        int id,
+        [FromServices] EventService service,
+        CancellationToken ct)
+    {
+        var result = await service.GetDetailAsync(id, ct);
+        return result.Status switch
+        {
+            ResultStatus.Ok => Results.Ok(result.Value),
+            ResultStatus.NotFound => Results.Problem(
+                detail: "Event not found.",
+                statusCode: 404,
+                title: "Not Found"),
+            _ => Results.StatusCode(500)
+        };
     }
 
     private static async Task<IResult> SetParticipation(

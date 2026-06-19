@@ -78,7 +78,7 @@ public class EventServiceTests
     [Fact]
     public async Task ListAsync_WhenStatusesAreMissing_UsesDraftAndActiveDefaults()
     {
-        var repository = new FakeEventRepository { ListResult = new PagedResult<Event>([], 0) };
+        var repository = new FakeEventRepository { ListResult = new PagedResult<EventListItem>([], 0) };
         var service = new EventService(repository);
 
         await service.ListAsync(new EventListRequest(Name: null, Statuses: null, Page: 1, PageSize: 10));
@@ -105,7 +105,7 @@ public class EventServiceTests
         var eventItem = CreateEvent("Screening", EventStatus.Active);
         var repository = new FakeEventRepository
         {
-            ListHandler = (_, _, _) => new PagedResult<Event>([eventItem], 1)
+            ListHandler = (_, _, _) => new PagedResult<EventListItem>([new EventListItem(eventItem, 2)], 1)
         };
         var service = new EventService(repository);
 
@@ -117,6 +117,45 @@ public class EventServiceTests
         Assert.Equal(100, result.PageSize);
         Assert.Single(result.Items);
         Assert.Equal("Screening", result.Items[0].Name);
+        Assert.Equal(2, result.Items[0].AcceptedParticipantsCount);
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_WhenEventDoesNotExist_ReturnsNotFound()
+    {
+        var repository = new FakeEventRepository();
+        var service = new EventService(repository);
+
+        var result = await service.GetDetailAsync(999);
+
+        Assert.Equal(ResultStatus.NotFound, result.Status);
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_WhenEventExists_MapsAcceptedParticipants()
+    {
+        var eventItem = CreateEvent(id: 77, name: "Dettaglio", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
+        var participants = new List<EventAcceptedParticipant>
+        {
+            new(Guid.NewGuid(), "Mario", "Rossi", "mario.rossi@example.com", "+391111111111"),
+            new(Guid.NewGuid(), "Anna", "Bianchi", "anna.bianchi@example.com", null)
+        };
+
+        var repository = new FakeEventRepository
+        {
+            GetDetailByIdResult = new EventDetailItem(eventItem, participants)
+        };
+        var service = new EventService(repository);
+
+        var result = await service.GetDetailAsync(eventItem.Id);
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.NotNull(result.Value);
+        Assert.Equal(eventItem.Id, result.Value!.Id);
+        Assert.Equal(2, result.Value.AcceptedParticipantsCount);
+        Assert.Equal(2, result.Value.AcceptedParticipants.Count);
+        Assert.Equal("Mario", result.Value.AcceptedParticipants[0].FirstName);
+        Assert.Equal("anna.bianchi@example.com", result.Value.AcceptedParticipants[1].Email);
     }
 
     [Fact]
@@ -326,12 +365,14 @@ public class EventServiceTests
     private sealed class FakeEventRepository : IEventRepository
     {
         public Event? GetByIdResult { get; set; }
-        public PagedResult<Event> ListResult { get; set; } = new([], 0);
+        public EventDetailItem? GetDetailByIdResult { get; set; }
+        public PagedResult<EventListItem> ListResult { get; set; } = new([], 0);
         public List<Event> Events { get; set; } = [];
         public List<EventParticipation> Participations { get; set; } = [];
 
         public Func<int, Event?>? GetByIdHandler { get; set; }
-        public Func<EventListFilter, int, int, PagedResult<Event>>? ListHandler { get; set; }
+        public Func<int, EventDetailItem?>? GetDetailByIdHandler { get; set; }
+        public Func<EventListFilter, int, int, PagedResult<EventListItem>>? ListHandler { get; set; }
 
         public EventListFilter? LastListFilter { get; private set; }
         public int LastListPage { get; private set; }
@@ -346,7 +387,15 @@ public class EventServiceTests
             return Task.FromResult(eventItem);
         }
 
-        public Task<PagedResult<Event>> ListAsync(EventListFilter filter, int page, int pageSize, CancellationToken ct = default)
+        public Task<EventDetailItem?> GetDetailByIdAsync(int id, CancellationToken ct = default)
+        {
+            var detail = GetDetailByIdHandler is null
+                ? GetDetailByIdResult
+                : GetDetailByIdHandler(id);
+            return Task.FromResult(detail);
+        }
+
+        public Task<PagedResult<EventListItem>> ListAsync(EventListFilter filter, int page, int pageSize, CancellationToken ct = default)
         {
             LastListFilter = filter;
             LastListPage = page;

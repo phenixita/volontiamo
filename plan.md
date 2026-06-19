@@ -1,126 +1,85 @@
-## Interview: Partecipazione eventi mobile
+## Interview: Dettaglio eventi backoffice
 
-Implementare la partecipazione agli eventi per l'app mobile mantenendo separata la lista backoffice esistente. L'approccio consigliato e deciso e': aggiungere una relazione molti-a-molti evento-utente con stato `Accepted`/`Refused`, nessun record per gli eventi non ancora scelti, una query dedicata per gli eventi dell'utente corrente e un singolo comando idempotente per cambiare stato. La lista mobile mostra solo eventi `Active` con `StartAtUtc > now`; la vista principale esclude i rifiutati, mentre il filtro `Mostra rifiutati` mostra solo rifiutati attivi e futuri.
+Implementare una prima bozza del dettaglio evento nel backoffice web: dalla lista eventi il titolo diventa un link al dettaglio, la lista mostra ID evento e numero di volontari accettati, la cancellazione viene rimossa dalla lista e spostata nel dettaglio. Il conteggio e la lista volontari richiedono modifiche backend/domain/API per esporre aggregati e partecipanti accettati, poi aggiornamenti dei contratti e delle pagine Next.js.
 
 **Steps**
-
-### Phase 1: Domain model and rules
-1. Add `EventParticipationStatus` enum with `Accepted` and `Refused` only. No `Pending`: a missing row means the user has not answered.
-2. Add `EventParticipation` entity with `EventId`, `UserId`, `Status`, `CreatedAt`, `UpdatedAt`, plus a method to change status and refresh `UpdatedAt`.
-3. Add participant-facing request/response records, e.g. `ParticipantEventListRequest`, `ParticipantEventListMode` (`Available`/`Refused`), `ParticipantEventResponse`, and `SetEventParticipationRequest`.
-4. Add `EventParticipationService` or participant-focused methods on `EventService` with a small interface:
-   - list current user's selectable events, normalized pagination, using `TimeProvider.GetUtcNow()`;
-   - set current user's status to `Accepted` or `Refused`;
-   - reject changes when the event is missing, not `Active`, deleted, or already started.
-5. Keep the existing `EventService.ListAsync` behavior unchanged for backoffice/admin event management.
-
-### Phase 2: Persistence
-6. Extend persistence behind the existing event seam, preferably by extending `IEventRepository` with participant-focused operations rather than introducing a second repository seam too early:
-   - `ListParticipantEventsAsync(filter, page, pageSize, ct)` returning event plus nullable participation status;
-   - `GetParticipationAsync(eventId, userId, ct)`;
-   - `AddParticipationAsync(participation, ct)` or `UpsertParticipationStatusAsync(...)` depending on the cleanest EF implementation.
-7. Configure `AppDbContext` with `DbSet<EventParticipation>` and table `event_participations`:
-   - composite key `(event_id, user_id)`;
-   - FK to `events.id` and `users.id`;
-   - `participation_status`, `created_at`, `updated_at` columns;
-   - indexes for `user_id`, `event_id`, and `(user_id, participation_status)` if useful for the mobile query.
-8. Add an EF migration for the new table. This blocks L1 tests and manual API use.
-
-### Phase 3: API contracts and endpoints
-9. Add API contracts in `src/volontiamo.api/Events/Contracts.cs` only if API-specific DTOs are needed; otherwise reuse domain request/response records consistently with current event endpoints.
-10. Add `GET /api/v1/events/my?view=available|refused&page=&pageSize=`:
-    - authenticate via bearer token;
-    - extract current `userId` from `ClaimTypes.NameIdentifier`;
-    - default `view=available`;
-    - `available` returns active future events where current user has no participation row or `Accepted`;
-    - `refused` returns only active future events where current user has `Refused`.
-11. Add `PUT /api/v1/events/{id:int}/participation` with body `{ status: "Accepted" | "Refused" }`:
-    - authenticated users of any `UserType` can set status, per decision;
-    - create row on first choice;
-    - update row when changing between `Accepted` and `Refused`;
-    - return the updated participant event or status payload;
-    - return `404` for missing event and `409` for events not selectable because they are draft, concluded, deleted, or already started.
-12. Leave existing `GET /api/v1/events`, `POST /api/v1/events`, and `DELETE /api/v1/events/{id}` unchanged for backoffice.
-
-### Phase 4: Mobile API client and types
-13. Update `src/volontiamo.mobile/volontiamo/lib/types.ts`:
-    - add `ParticipationStatus = 'Accepted' | 'Refused'`;
-    - add `ParticipantEventResponse` without `status`, or with `participationStatus` only, so the mobile screen no longer depends on the event lifecycle badge.
-14. Update `src/volontiamo.mobile/volontiamo/lib/api.ts`:
-    - add mapper for participation status;
-    - add `fetchMyEvents(view, page, pageSize)` calling `/events/my`;
-    - add `setEventParticipation(eventId, status)` calling `PUT /events/{id}/participation`;
-    - keep graceful empty-list fallback for list failures, but return actionable `ApiResult` for status changes.
-
-### Phase 5: Mobile UI
-15. Update `src/volontiamo.mobile/volontiamo/app/(drawer)/events.tsx`:
-    - replace `fetchEvents` with `fetchMyEvents`;
-    - add top filter `Mostra rifiutati` that switches `view` between `available` and `refused`, resets pagination, and reloads page 1;
-    - remove the status badge and the `statusLabel`, `statusBadgeStyle`, and `statusTextStyle` helpers;
-    - show two stable actions on every card: `Partecipo` and `Rifiuto`, with selected/disabled styling for the current state;
-    - in available view, setting `Refused` removes the card from the list after success;
-    - in refused view, setting `Accepted` removes the card from the refused list after success;
-    - support loading state per event while the participation update is in flight;
-    - keep pull-to-refresh and infinite scroll behavior.
-16. Keep app scope mobile-only: do not update `volontiamo.web` in this work.
-
-### Phase 6: Tests and verification
-17. Add/extend L0 tests in `src/volontiamo.domain.test.L0/EventServiceTests.cs` or a new `EventParticipationServiceTests.cs`:
-    - available list includes active future unselected and accepted events;
-    - available list excludes refused events;
-    - refused view returns only refused active future events;
-    - draft, concluded, deleted, and already-started events are excluded or rejected;
-    - first choice creates participation;
-    - changing `Accepted` to `Refused` and back updates the existing row;
-    - missing event returns `NotFound`;
-    - use fake in-memory repository implementations, no mocking libraries.
-18. Add/extend L1 tests in `src/volontiamo.api.tests.L1/EventsEndpointTests.cs`:
-    - `GET /api/v1/events/my` requires bearer token;
-    - default available view returns active future events only and hides refused;
-    - `view=refused` returns only refused active future events;
-    - `PUT /events/{id}/participation` creates and updates status;
-    - status changes after event start or on draft/concluded events return `409`;
-    - existing `/api/v1/events` list behavior remains unchanged.
-19. Run automated verification from workspace root:
-    - `dotnet test .\src\volontiamo.domain.test.L0\volontiamo.domain.test.L0.csproj`
-    - `dotnet test .\src\volontiamo.api.tests.L1\volontiamo.api.tests.L1.csproj` with Docker available.
-20. Run mobile static verification from `src/volontiamo.mobile/volontiamo`:
-    - `npx tsc --noEmit` because `package.json` has no dedicated typecheck script.
-21. Manual verification:
-    - run `./start-manual-test.ps1` from workspace root;
-    - login in the mobile app;
-    - confirm draft events no longer appear;
-    - confirm active future events appear without the status tag;
-    - tap `Rifiuto` and confirm the card disappears;
-    - enable `Mostra rifiutati` and confirm the refused event appears;
-    - tap `Partecipo` there and confirm it disappears from refused and reappears in available.
+1. Aggiornare il dominio con nuovi contratti di lettura evento backoffice (*blocca 2, 3, 4*):
+   - Estendere `EventResponse` con `AcceptedParticipantsCount` oppure introdurre un item di lista dedicato se il cambio di contratto risulta più pulito durante l'implementazione.
+   - Aggiungere un contratto per il dettaglio, per esempio `EventDetailResponse`, che includa dati evento, `AcceptedParticipantsCount` e lista di volontari accettati.
+   - Aggiungere un record per volontario evento, con `UserId`, `FirstName`, `LastName`, `Email`, `Phone`.
+2. Estendere l'interfaccia repository eventi (*dipende da 1*):
+   - Aggiungere un modulo/query dietro `IEventRepository` per leggere lista eventi con conteggio accettati.
+   - Aggiungere lettura dettaglio per id con volontari accettati.
+   - Mantenere la seam su `IEventRepository`, evitando logica business in `volontiamo.api`.
+3. Scrivere/aggiornare test L0 dominio (*dipende da 1, 2; può guidare 4*):
+   - Testare che `ListAsync` mappi `AcceptedParticipantsCount` e conti solo `EventParticipationStatus.Accepted`, non `Refused`.
+   - Testare nuovo metodo dettaglio: not found se evento assente; successo con evento, conteggio accettati e dati volontari accettati.
+   - Aggiornare `FakeEventRepository` in memoria, senza mocking library.
+4. Implementare `EventService` (*dipende da 1, 2, 3*):
+   - Aggiungere metodo dettaglio, ad esempio `GetDetailAsync(int id, CancellationToken ct)`.
+   - Mappare i nuovi DTO mantenendo validazioni e soft-delete coerenti con la lista.
+5. Implementare repository EF Core (*dipende da 2, 4*):
+   - In `EventRepository`, usare query aggregate su `EventParticipations` filtrando `Status == Accepted`.
+   - Per il dettaglio, recuperare evento non cancellato e volontari accettati joinando `Users`, ordinati per cognome/nome.
+   - Evitare N+1 query nella lista: preferire group/join o subquery traducibile da EF.
+6. Aggiornare endpoint API (*dipende da 4, 5*):
+   - Aggiungere `GET /api/v1/events/{id:int}` prima delle route più generiche dove serve.
+   - Restituire 200 con dettaglio o 404 problem se evento non trovato.
+   - Lasciare `DELETE /api/v1/events/{id:int}` invariato, usato dalla pagina dettaglio.
+7. Scrivere/aggiornare test L1 API (*dipende da 6; può essere in parallelo con 8 dopo i contratti*):
+   - Verificare che `GET /api/v1/events` includa conteggio accettati e ignori rifiutati.
+   - Verificare `GET /api/v1/events/{id}` con dati evento, volontari accettati e 404 per evento inesistente.
+   - Verificare che la cancellazione continui a escludere l'evento dalla lista.
+8. Aggiornare contratti/adattatore web (*dipende da 6*):
+   - Estendere `EventDto` con `acceptedParticipantsCount`.
+   - Aggiungere `EventDetailDto`, `EventVolunteerDto` e risultato di lettura dettaglio.
+   - Aggiungere funzione adapter `readEventDetail(id)` con validazione runtime del payload.
+   - Riutilizzare `deleteEvent` esistente per la pagina dettaglio.
+9. Aggiornare pagina lista eventi (*dipende da 8*):
+   - Aggiungere colonna ID evento come prima colonna.
+   - Rendere il titolo evento un `Link` a `/events/{id}`.
+   - Aggiungere colonna volontari con `acceptedParticipantsCount`.
+   - Rimuovere colonna/pulsante elimina.
+   - Adeguare `min-w` tabella solo quanto necessario.
+10. Creare pagina dettaglio Next.js (*dipende da 8; parallelo con 9 dopo adapter*):
+   - Nuova route `app/events/[id]/page.tsx`.
+   - Fare `requireCurrentUser`, leggere dettaglio via adapter e gestire stati errore/not found.
+   - Mostrare riepilogo evento, periodo, luogo, stato, note markdown, conteggio volontari accettati.
+   - Mostrare tabella/lista volontari accettati con nome, cognome, email, telefono.
+   - Aggiungere comando elimina con conferma, usando `deleteEventAction` o nuova action dedicata che dopo successo reindirizzi a `/events`.
+11. Verifica automatica (*dipende da 3-10*):
+   - Eseguire L0 dominio: `dotnet test src/volontiamo.domain.test.L0/volontiamo.domain.test.L0.csproj`.
+   - Eseguire L1 API: `dotnet test src/volontiamo.api.tests.L1/volontiamo.api.tests.L1.csproj`.
+   - Eseguire controlli web disponibili nel package Next.js, verificando `package.json` prima di scegliere comando esatto.
+12. Verifica manuale (*dipende da 11*):
+   - Avviare API/web come da setup locale se necessario.
+   - Aprire `/events`, verificare colonne ID, Evento linkato, Volontari, assenza Elimina.
+   - Entrare in `/events/{id}`, verificare riepilogo, lista volontari accettati, cancellazione con redirect alla lista.
 
 **Relevant files**
-- `c:/dev/volontiamo/src/volontiamo.domain/Event.cs` — add or reference event lifecycle rules; existing `EventStatus` remains source of active/draft/concluded state.
-- `c:/dev/volontiamo/src/volontiamo.domain/EventService.cs` — keep admin list/create/delete behavior; add participant list/change behavior here or adjacent in a dedicated service.
-- `c:/dev/volontiamo/src/volontiamo.domain/IEventRepository.cs` — extend the event persistence seam for participant queries and upsert/get participation operations.
-- `c:/dev/volontiamo/src/volontiamo.api/Persistence/AppDbContext.cs` — configure `event_participations` table and EF mapping.
-- `c:/dev/volontiamo/src/volontiamo.api/Persistence/EventRepository.cs` — implement joined participant queries and participation upsert/change.
-- `c:/dev/volontiamo/src/volontiamo.api/Events/EventEndpoints.cs` — add `GET /events/my` and `PUT /events/{id}/participation` while preserving current endpoints.
-- `c:/dev/volontiamo/src/volontiamo.api/Program.cs` — register any new service with DI; `TimeProvider.System` already exists.
-- `c:/dev/volontiamo/src/volontiamo.mobile/volontiamo/lib/types.ts` — add participant event and participation status types.
-- `c:/dev/volontiamo/src/volontiamo.mobile/volontiamo/lib/api.ts` — add mobile event list and status update calls.
-- `c:/dev/volontiamo/src/volontiamo.mobile/volontiamo/app/(drawer)/events.tsx` — implement filter, remove event status tag, and add participation actions.
-- `c:/dev/volontiamo/src/volontiamo.domain.test.L0/EventServiceTests.cs` or new `EventParticipationServiceTests.cs` — L0 rules with fake repositories.
-- `c:/dev/volontiamo/src/volontiamo.api.tests.L1/EventsEndpointTests.cs` — endpoint integration coverage with PostgreSQL Testcontainers.
+- `c:/dev/volontiamo/src/volontiamo.domain/EventService.cs` — aggiungere contratti e metodo dettaglio; mappare count/lista volontari.
+- `c:/dev/volontiamo/src/volontiamo.domain/IEventRepository.cs` — ampliare la seam del repository con query di lista/dettaglio arricchite.
+- `c:/dev/volontiamo/src/volontiamo.api/Persistence/EventRepository.cs` — implementare query EF Core per count accepted e volontari accettati.
+- `c:/dev/volontiamo/src/volontiamo.api/Events/EventEndpoints.cs` — aggiungere endpoint dettaglio e mappare 404.
+- `c:/dev/volontiamo/src/volontiamo.domain.test.L0/EventServiceTests.cs` — test in memoria dei nuovi comportamenti dominio.
+- `c:/dev/volontiamo/src/volontiamo.api.tests.L1/EventsEndpointTests.cs` — test integrazione endpoint e aggregazioni Postgres.
+- `c:/dev/volontiamo/src/volontiamo.web/volontiamo/lib/events/contracts.ts` — aggiornare DTO TypeScript.
+- `c:/dev/volontiamo/src/volontiamo.web/volontiamo/lib/events/http-events-adapter.ts` — aggiungere lettura dettaglio e validazione payload.
+- `c:/dev/volontiamo/src/volontiamo.web/volontiamo/app/events/page.tsx` — aggiornare tabella lista eventi.
+- `c:/dev/volontiamo/src/volontiamo.web/volontiamo/app/events/[id]/page.tsx` — nuova pagina dettaglio.
+- `c:/dev/volontiamo/src/volontiamo.web/volontiamo/app/events/actions.ts` — riusare o adattare redirect delete dal dettaglio.
 
 **Verification**
-1. L0 domain: `dotnet test .\src\volontiamo.domain.test.L0\volontiamo.domain.test.L0.csproj`.
-2. L1 API/Postgres: `dotnet test .\src\volontiamo.api.tests.L1\volontiamo.api.tests.L1.csproj`.
-3. Mobile TypeScript: from `src/volontiamo.mobile/volontiamo`, run `npx tsc --noEmit`.
-4. Manual app flow through `./start-manual-test.ps1` and Expo Android.
+1. `dotnet test src/volontiamo.domain.test.L0/volontiamo.domain.test.L0.csproj` deve passare.
+2. `dotnet test src/volontiamo.api.tests.L1/volontiamo.api.tests.L1.csproj` deve passare.
+3. Comando web da `src/volontiamo.web/volontiamo/package.json`, preferibilmente lint/typecheck se presente.
+4. Manuale: `/events` mostra ID, titolo linkato, count accettati e non mostra elimina.
+5. Manuale: `/events/{id}` mostra dettaglio, volontari accettati con nome/cognome/email/telefono, elimina con conferma e redirect.
 
 **Decisions**
-- Missing participation row means the user has not answered; no `Pending` row is created.
-- `Mostra rifiutati` is exclusive: it shows only refused events.
-- Both normal and refused views are limited to active future events.
-- Changing choice is allowed only before event start.
-- Users can only switch between `Accepted` and `Refused`; there is no reset to unanswered.
-- LILT/staff users are allowed by the API to set participation too, even though `volontiamo.mobile` is volunteer-focused.
-- Existing backoffice `/api/v1/events` behavior remains unchanged.
-- `volontiamo.web` is out of scope for this change.
+- Conteggio volontari: solo `EventParticipationStatus.Accepted`.
+- Lista volontari nel dettaglio: nome, cognome, email, telefono.
+- Eliminazione: rimossa dalla lista, disponibile nel dettaglio con conferma.
+- Route web dettaglio: `/events/{id}`.
+- Incluso: backend/domain/API, web contracts, lista e dettaglio web, test L0/L1 pertinenti.
+- Escluso: modifica della partecipazione volontari dal backoffice, conteggio rifiutati, lista volontari rifiutati, editing evento nel dettaglio, nuove migrazioni database salvo necessità emersa durante implementazione.

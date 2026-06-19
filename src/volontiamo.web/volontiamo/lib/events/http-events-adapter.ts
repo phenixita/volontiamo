@@ -2,6 +2,8 @@ import "server-only";
 
 import type {
   CreateEventInput,
+  EventDetailDto,
+  EventDetailReadResult,
   EventDto,
   EventMutationResult,
   EventsReadResult,
@@ -33,7 +35,43 @@ function isApiEventDto(value: unknown): value is EventDto {
     typeof value.operationalNotesMarkdown === "string" &&
     isEventStatus(value.status) &&
     typeof value.createdAt === "string" &&
-    typeof value.updatedAt === "string"
+    typeof value.updatedAt === "string" &&
+    typeof value.acceptedParticipantsCount === "number"
+  );
+}
+
+function isApiEventVolunteerDto(value: unknown): value is EventDetailDto["acceptedParticipants"][number] {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.userId === "string" &&
+    typeof value.firstName === "string" &&
+    typeof value.lastName === "string" &&
+    typeof value.email === "string" &&
+    (typeof value.phone === "string" || value.phone === null)
+  );
+}
+
+function isApiEventDetailDto(value: unknown): value is EventDetailDto {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "number" &&
+    typeof value.name === "string" &&
+    typeof value.startAtUtc === "string" &&
+    typeof value.endAtUtc === "string" &&
+    (typeof value.location === "string" || value.location === null) &&
+    typeof value.operationalNotesMarkdown === "string" &&
+    isEventStatus(value.status) &&
+    typeof value.createdAt === "string" &&
+    typeof value.updatedAt === "string" &&
+    typeof value.acceptedParticipantsCount === "number" &&
+    Array.isArray(value.acceptedParticipants) &&
+    value.acceptedParticipants.every((participant) => isApiEventVolunteerDto(participant))
   );
 }
 
@@ -126,6 +164,50 @@ export async function readEventsPage(input: ReadEventsInput): Promise<EventsRead
 
   if (!isEventsPageEnvelope(payload)) {
     return { ok: false, kind: "invalid-response", message: "Il payload eventi non rispetta il contratto previsto." };
+  }
+
+  return { ok: true, data: payload };
+}
+
+export async function readEventDetail(id: number): Promise<EventDetailReadResult> {
+  const baseUrlResult = readApiBaseUrl();
+  if (!baseUrlResult.ok) {
+    return { ok: false, kind: "configuration", message: baseUrlResult.message };
+  }
+
+  const token = await readSessionToken();
+  if (!token) {
+    return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
+  }
+
+  const url = new URL(`${EVENTS_ROUTE}/${id}`, baseUrlResult.value);
+
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      method: "GET",
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    return { ok: false, kind: "network", message: "Backend non raggiungibile durante la lettura dettaglio evento." };
+  }
+
+  if (!response.ok) {
+    const detail = await readHttpErrorMessage(response);
+    const baseMessage = `Lettura dettaglio evento fallita (${response.status}).`;
+    return {
+      ok: false,
+      kind: "http",
+      statusCode: response.status,
+      message: detail ? `${baseMessage} ${detail}` : baseMessage,
+    };
+  }
+
+  const payload: unknown = await response.json();
+  if (!isApiEventDetailDto(payload)) {
+    return { ok: false, kind: "invalid-response", message: "Il backend ha restituito un dettaglio evento non valido." };
   }
 
   return { ok: true, data: payload };
