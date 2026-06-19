@@ -7,6 +7,7 @@ public class AppDbContext : DbContext
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<Event> Events => Set<Event>();
+    public DbSet<EventParticipation> EventParticipations => Set<EventParticipation>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -59,6 +60,32 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.Status).HasDatabaseName("ix_events_status");
             entity.HasIndex(e => e.StartAtUtc).HasDatabaseName("ix_events_start_at_utc");
             entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        modelBuilder.Entity<EventParticipation>(entity =>
+        {
+            entity.ToTable("event_participations");
+            entity.HasKey(p => new { p.EventId, p.UserId });
+
+            entity.Property(p => p.EventId).HasColumnName("event_id").IsRequired();
+            entity.Property(p => p.UserId).HasColumnName("user_id").IsRequired();
+            entity.Property(p => p.Status).HasColumnName("participation_status").IsRequired();
+            entity.Property(p => p.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").IsRequired();
+            entity.Property(p => p.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").IsRequired();
+
+            entity.HasOne<Event>()
+                .WithMany()
+                .HasForeignKey(p => p.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(p => p.UserId).HasDatabaseName("ix_event_participations_user_id");
+            entity.HasIndex(p => p.EventId).HasDatabaseName("ix_event_participations_event_id");
+            entity.HasIndex(p => new { p.UserId, p.Status }).HasDatabaseName("ix_event_participations_user_id_status");
         });
     }
 }

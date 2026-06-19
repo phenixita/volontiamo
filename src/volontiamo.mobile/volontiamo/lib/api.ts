@@ -2,7 +2,18 @@ import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
 
 import { readSessionToken } from './session';
-import { ApiResult, AuthenticatedUser, EventResponse, EventStatus, LoginSuccess, PagedResponse, UserType } from './types';
+import {
+  ApiResult,
+  AuthenticatedUser,
+  EventResponse,
+  EventStatus,
+  LoginSuccess,
+  PagedResponse,
+  ParticipantEventListView,
+  ParticipantEventResponse,
+  ParticipationStatus,
+  UserType,
+} from './types';
 
 const API_PORT = 5159;
 const API_PREFIX = '/api/v1';
@@ -115,6 +126,12 @@ function mapEventStatus(value: unknown): EventStatus | null {
   return null;
 }
 
+function mapParticipationStatus(value: unknown): ParticipationStatus | null {
+  if (value === 0 || value === 'Accepted') return 'Accepted';
+  if (value === 1 || value === 'Refused') return 'Refused';
+  return null;
+}
+
 function mapAuthenticatedUser(value: unknown): AuthenticatedUser | null {
   if (!isRecord(value)) {
     return null;
@@ -175,6 +192,38 @@ function mapEvent(value: unknown): EventResponse | null {
   };
 }
 
+function mapParticipantEvent(value: unknown): ParticipantEventResponse | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const participationStatus = value.participationStatus === null
+    ? null
+    : mapParticipationStatus(value.participationStatus);
+
+  if (
+    typeof value.id !== 'number' ||
+    typeof value.name !== 'string' ||
+    typeof value.startAtUtc !== 'string' ||
+    typeof value.endAtUtc !== 'string' ||
+    (typeof value.location !== 'string' && value.location !== null) ||
+    typeof value.operationalNotesMarkdown !== 'string' ||
+    participationStatus === null && value.participationStatus !== null
+  ) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    name: value.name,
+    startAtUtc: value.startAtUtc,
+    endAtUtc: value.endAtUtc,
+    location: value.location,
+    operationalNotesMarkdown: value.operationalNotesMarkdown,
+    participationStatus,
+  };
+}
+
 function mapEventsPage(value: unknown, page: number, pageSize: number): PagedResponse<EventResponse> | null {
   if (!isRecord(value) || !Array.isArray(value.items)) {
     return null;
@@ -187,6 +236,24 @@ function mapEventsPage(value: unknown, page: number, pageSize: number): PagedRes
 
   return {
     items: items as EventResponse[],
+    page: typeof value.page === 'number' ? value.page : page,
+    pageSize: typeof value.pageSize === 'number' ? value.pageSize : pageSize,
+    totalCount: value.totalCount,
+  };
+}
+
+function mapParticipantEventsPage(value: unknown, page: number, pageSize: number): PagedResponse<ParticipantEventResponse> | null {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    return null;
+  }
+
+  const items = value.items.map(mapParticipantEvent);
+  if (items.some(item => item === null) || typeof value.totalCount !== 'number') {
+    return null;
+  }
+
+  return {
+    items: items as ParticipantEventResponse[],
     page: typeof value.page === 'number' ? value.page : page,
     pageSize: typeof value.pageSize === 'number' ? value.pageSize : pageSize,
     totalCount: value.totalCount,
@@ -209,6 +276,18 @@ function emptyEventsResponse(
   page: number,
   pageSize: number,
 ): PagedResponse<EventResponse> {
+  return {
+    items: [],
+    page,
+    pageSize,
+    totalCount: 0,
+  };
+}
+
+function emptyParticipantEventsResponse(
+  page: number,
+  pageSize: number,
+): PagedResponse<ParticipantEventResponse> {
   return {
     items: [],
     page,
@@ -241,6 +320,70 @@ export async function fetchEvents(
     console.warn('Events API request failed', error);
     return emptyEventsResponse(page, pageSize);
   }
+}
+
+export async function fetchMyEvents(
+  view: ParticipantEventListView = 'available',
+  page: number = 1,
+  pageSize: number = 15,
+): Promise<PagedResponse<ParticipantEventResponse>> {
+  const params = new URLSearchParams({
+    view,
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+
+  try {
+    const response = await fetchJson(`/events/my?${params}`);
+
+    if (!response.ok) {
+      console.warn(`Participant events API unavailable: ${response.status}`);
+      return emptyParticipantEventsResponse(page, pageSize);
+    }
+
+    const payload: unknown = await response.json();
+    const mapped = mapParticipantEventsPage(payload, page, pageSize);
+    return mapped ?? emptyParticipantEventsResponse(page, pageSize);
+  } catch (error) {
+    console.warn('Participant events API request failed', error);
+    return emptyParticipantEventsResponse(page, pageSize);
+  }
+}
+
+export async function setEventParticipation(
+  eventId: number,
+  status: ParticipationStatus,
+): Promise<ApiResult<ParticipantEventResponse>> {
+  let response: Response;
+  try {
+    response = await fetchJson(`/events/${eventId}/participation`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+  } catch {
+    return { ok: false, message: 'Backend non raggiungibile durante il salvataggio partecipazione.' };
+  }
+
+  if (!response.ok) {
+    const detail = await readHttpErrorMessage(response);
+    const baseMessage = `Salvataggio partecipazione fallito (${response.status}).`;
+    return { ok: false, statusCode: response.status, message: detail ? `${baseMessage} ${detail}` : baseMessage };
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    return { ok: false, message: 'Il backend ha restituito un payload partecipazione non JSON.' };
+  }
+
+  const participantEvent = mapParticipantEvent(payload);
+  if (!participantEvent) {
+    return { ok: false, message: 'Il payload partecipazione non rispetta il contratto previsto.' };
+  }
+
+  return { ok: true, data: participantEvent };
 }
 
 export async function loginWithPassword(email: string, password: string): Promise<ApiResult<LoginSuccess>> {

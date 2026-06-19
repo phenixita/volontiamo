@@ -37,6 +37,16 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
     }
 
     [Fact]
+    public async Task MyEvents_WithoutBearerToken_ReturnsUnauthorized()
+    {
+        _client.DefaultRequestHeaders.Authorization = null;
+
+        var response = await _client.GetAsync("/api/v1/events/my");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Create_ValidEvent_ReturnsCreatedWithNumericId()
     {
         await AuthenticateAsSeedUserAsync();
@@ -165,12 +175,111 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         Assert.DoesNotContain(paged!.Items, e => e.Id == eventItem.Id);
     }
 
+    [Fact]
+    public async Task MyEvents_DefaultAvailableReturnsActiveFutureEventsAndHidesRefused()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var token = Guid.NewGuid().ToString("N");
+        var available = await CreateEventAsync(ValidCreateRequest(name: $"{token} available", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+        var refused = await CreateEventAsync(ValidCreateRequest(name: $"{token} refused", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(11)));
+        await CreateEventAsync(ValidCreateRequest(name: $"{token} draft", status: EventStatus.Draft, startAtUtc: DateTime.UtcNow.AddDays(12)));
+        await CreateEventAsync(ValidCreateRequest(name: $"{token} concluded", status: EventStatus.Concluded, startAtUtc: DateTime.UtcNow.AddDays(13)));
+        await CreateEventAsync(ValidCreateRequest(name: $"{token} started", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddHours(-2)));
+        await SetParticipationAsync(refused.Id, EventParticipationStatus.Refused);
+
+        var response = await _client.GetAsync($"/api/v1/events/my?page=1&pageSize=100");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var paged = await response.Content.ReadFromJsonAsync<PagedResponse<ParticipantEventResponse>>();
+        Assert.NotNull(paged);
+        var matching = paged!.Items.Where(e => e.Name.Contains(token, StringComparison.Ordinal)).ToList();
+        Assert.Single(matching);
+        Assert.Equal(available.Id, matching[0].Id);
+        Assert.Null(matching[0].ParticipationStatus);
+    }
+
+    [Fact]
+    public async Task MyEvents_RefusedViewReturnsOnlyRefusedActiveFutureEvents()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var token = Guid.NewGuid().ToString("N");
+        var refused = await CreateEventAsync(ValidCreateRequest(name: $"{token} refused", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+        var accepted = await CreateEventAsync(ValidCreateRequest(name: $"{token} accepted", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(11)));
+        await SetParticipationAsync(refused.Id, EventParticipationStatus.Refused);
+        await SetParticipationAsync(accepted.Id, EventParticipationStatus.Accepted);
+
+        var response = await _client.GetAsync("/api/v1/events/my?view=refused&page=1&pageSize=100");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var paged = await response.Content.ReadFromJsonAsync<PagedResponse<ParticipantEventResponse>>();
+        Assert.NotNull(paged);
+        var matching = paged!.Items.Where(e => e.Name.Contains(token, StringComparison.Ordinal)).ToList();
+        Assert.Single(matching);
+        Assert.Equal(refused.Id, matching[0].Id);
+        Assert.Equal(EventParticipationStatus.Refused, matching[0].ParticipationStatus);
+    }
+
+    [Fact]
+    public async Task Participation_PutCreatesAndUpdatesStatus()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var eventItem = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+
+        var acceptedResponse = await SetParticipationAsync(eventItem.Id, EventParticipationStatus.Accepted);
+        var refusedResponse = await SetParticipationAsync(eventItem.Id, EventParticipationStatus.Refused);
+
+        Assert.Equal(EventParticipationStatus.Accepted, acceptedResponse.ParticipationStatus);
+        Assert.Equal(EventParticipationStatus.Refused, refusedResponse.ParticipationStatus);
+        Assert.Equal(eventItem.Id, refusedResponse.Id);
+    }
+
+    [Fact]
+    public async Task Participation_WhenEventIsNotSelectable_ReturnsConflict()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var draft = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Draft, startAtUtc: DateTime.UtcNow.AddDays(10)));
+        var concluded = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Concluded, startAtUtc: DateTime.UtcNow.AddDays(11)));
+        var alreadyStarted = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddHours(-2)));
+
+        var draftResponse = await _client.PutAsJsonAsync($"/api/v1/events/{draft.Id}/participation", new { status = "Accepted" });
+        var concludedResponse = await _client.PutAsJsonAsync($"/api/v1/events/{concluded.Id}/participation", new { status = "Accepted" });
+        var alreadyStartedResponse = await _client.PutAsJsonAsync($"/api/v1/events/{alreadyStarted.Id}/participation", new { status = "Accepted" });
+
+        Assert.Equal(HttpStatusCode.Conflict, draftResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, concludedResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, alreadyStartedResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task List_BackofficeBehaviorIsUnchangedWhenParticipationIsRefused()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var token = Guid.NewGuid().ToString("N");
+        var eventItem = await CreateEventAsync(ValidCreateRequest(name: $"{token} backoffice", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+        await SetParticipationAsync(eventItem.Id, EventParticipationStatus.Refused);
+
+        var response = await _client.GetAsync($"/api/v1/events?name={token}&status=active");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var paged = await response.Content.ReadFromJsonAsync<PagedResponse<EventResponse>>();
+        Assert.NotNull(paged);
+        Assert.Contains(paged!.Items, e => e.Id == eventItem.Id);
+    }
+
     private async Task<EventResponse> CreateEventAsync(CreateEventRequest request)
     {
         var response = await _client.PostAsJsonAsync("/api/v1/events", request);
         response.EnsureSuccessStatusCode();
         var eventItem = await response.Content.ReadFromJsonAsync<EventResponse>();
         return eventItem!;
+    }
+
+    private async Task<ParticipantEventResponse> SetParticipationAsync(int eventId, EventParticipationStatus status)
+    {
+        var response = await _client.PutAsJsonAsync($"/api/v1/events/{eventId}/participation", new { status = status.ToString() });
+        response.EnsureSuccessStatusCode();
+        var participantEvent = await response.Content.ReadFromJsonAsync<ParticipantEventResponse>();
+        return participantEvent!;
     }
 
     private static CreateEventRequest ValidCreateRequest(

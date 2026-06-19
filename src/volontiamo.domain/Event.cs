@@ -7,6 +7,12 @@ public enum EventStatus
     Concluded = 2
 }
 
+public enum EventParticipationStatus
+{
+    Accepted = 0,
+    Refused = 1
+}
+
 public class Event
 {
     public int Id { get; private set; }
@@ -49,5 +55,38 @@ public class Event
     {
         IsDeleted = true;
         UpdatedAt = DateTime.UtcNow;
+    }
+}
+
+public class EventParticipation
+{
+    public int EventId { get; private set; }
+    public Guid UserId { get; private set; }
+    public EventParticipationStatus Status { get; private set; }
+    public DateTime CreatedAt { get; private set; }
+    public DateTime UpdatedAt { get; private set; }
+
+    private EventParticipation() { }
+
+    public static EventParticipation Create(
+        int eventId,
+        Guid userId,
+        EventParticipationStatus status,
+        DateTime nowUtc)
+    {
+        return new EventParticipation
+        {
+            EventId = eventId,
+            UserId = userId,
+            Status = status,
+            CreatedAt = nowUtc,
+            UpdatedAt = nowUtc
+        };
+    }
+
+    public void ChangeStatus(EventParticipationStatus status, DateTime nowUtc)
+    {
+        Status = status;
+        UpdatedAt = nowUtc;
     }
 }

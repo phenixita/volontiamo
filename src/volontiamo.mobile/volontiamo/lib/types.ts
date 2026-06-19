@@ -1,5 +1,9 @@
 export type EventStatus = 'Draft' | 'Active' | 'Concluded';
 
+export type ParticipationStatus = 'Accepted' | 'Refused';
+
+export type ParticipantEventListView = 'available' | 'refused';
+
 export type UserType = 0 | 1;
 
 export type AuthenticatedUser = {
@@ -31,6 +35,16 @@ export type EventResponse = {
   status: EventStatus;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ParticipantEventResponse = {
+  id: number;
+  name: string;
+  startAtUtc: string;
+  endAtUtc: string;
+  location: string | null;
+  operationalNotesMarkdown: string;
+  participationStatus: ParticipationStatus | null;
 };
 
 export type PagedResponse<T> = {

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using volontiamo.domain;
 
@@ -12,7 +13,9 @@ public static class EventEndpoints
             .RequireAuthorization();
 
         group.MapPost("/", CreateEvent);
+        group.MapGet("/my", ListMyEvents);
         group.MapGet("/", ListEvents);
+        group.MapPut("/{id:int}/participation", SetParticipation);
         group.MapDelete("/{id:int}", DeleteEvent);
     }
 
@@ -56,6 +59,69 @@ public static class EventEndpoints
             pageSize ?? 10);
         var result = await service.ListAsync(request, ct);
         return Results.Ok(result);
+    }
+
+    private static async Task<IResult> ListMyEvents(
+        HttpContext context,
+        [FromQuery] string? view,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        [FromServices] EventService service,
+        CancellationToken ct)
+    {
+        if (!TryGetCurrentUserId(context, out var userId))
+            return Results.Unauthorized();
+
+        if (!TryParseParticipantView(view, out var mode))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["view"] = ["View must be available or refused."]
+            });
+        }
+
+        var request = new ParticipantEventListRequest(
+            userId,
+            mode,
+            page ?? 1,
+            pageSize ?? 10);
+
+        var result = await service.ListParticipantEventsAsync(request, ct);
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> SetParticipation(
+        int id,
+        HttpContext context,
+        [FromBody] EventParticipationStatusRequest request,
+        [FromServices] EventService service,
+        CancellationToken ct)
+    {
+        if (!TryGetCurrentUserId(context, out var userId))
+            return Results.Unauthorized();
+
+        if (!TryParseParticipationStatus(request.Status, out var status))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["status"] = ["Status must be Accepted or Refused."]
+            });
+        }
+
+        var result = await service.SetParticipationAsync(id, new SetEventParticipationRequest(userId, status), ct);
+        return result.Status switch
+        {
+            ResultStatus.Ok => Results.Ok(result.Value),
+            ResultStatus.NotFound => Results.Problem(
+                detail: "Event not found.",
+                statusCode: 404,
+                title: "Not Found"),
+            ResultStatus.Conflict => Results.Problem(
+                detail: result.ErrorMessage ?? "Event is not selectable.",
+                statusCode: 409,
+                title: "Conflict"),
+            _ => Results.StatusCode(500)
+        };
     }
 
     private static async Task<IResult> DeleteEvent(
@@ -112,4 +178,39 @@ public static class EventEndpoints
         public static StatusParseResult Success(IReadOnlySet<EventStatus>? statuses) => new(true, statuses);
         public static StatusParseResult Failure() => new(false, null);
     }
+
+    private static bool TryGetCurrentUserId(HttpContext context, out Guid userId)
+    {
+        var claimValue = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return Guid.TryParse(claimValue, out userId);
+    }
+
+    private static bool TryParseParticipantView(string? view, out ParticipantEventListMode mode)
+    {
+        if (string.IsNullOrWhiteSpace(view) || string.Equals(view, "available", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = ParticipantEventListMode.Available;
+            return true;
+        }
+
+        if (string.Equals(view, "refused", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = ParticipantEventListMode.Refused;
+            return true;
+        }
+
+        mode = ParticipantEventListMode.Available;
+        return false;
+    }
+
+    private static bool TryParseParticipationStatus(string? rawStatus, out EventParticipationStatus status)
+    {
+        if (Enum.TryParse<EventParticipationStatus>(rawStatus, ignoreCase: true, out status) && Enum.IsDefined(status))
+            return true;
+
+        status = EventParticipationStatus.Accepted;
+        return false;
+    }
+
+    private sealed record EventParticipationStatusRequest(string? Status);
 }

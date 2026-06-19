@@ -38,6 +38,45 @@ public class EventRepository : IEventRepository
         return new PagedResult<Event>(items, totalCount);
     }
 
+    public async Task<PagedResult<ParticipantEventListItem>> ListParticipantEventsAsync(ParticipantEventListFilter filter, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query =
+            from eventItem in _db.Events
+            join participationForUser in _db.EventParticipations.Where(p => p.UserId == filter.UserId)
+                on eventItem.Id equals participationForUser.EventId into participationsForUser
+            from participation in participationsForUser.DefaultIfEmpty()
+            where eventItem.Status == EventStatus.Active
+                && eventItem.StartAtUtc > filter.NowUtc
+            select new
+            {
+                Event = eventItem,
+                ParticipationStatus = participation == null
+                    ? (EventParticipationStatus?)null
+                    : participation.Status
+            };
+
+        query = filter.Mode == ParticipantEventListMode.Refused
+            ? query.Where(item => item.ParticipationStatus == EventParticipationStatus.Refused)
+            : query.Where(item => item.ParticipationStatus == null || item.ParticipationStatus == EventParticipationStatus.Accepted);
+
+        var totalCount = await query.CountAsync(ct);
+        var items = await query
+            .OrderBy(item => item.Event.StartAtUtc)
+            .ThenBy(item => item.Event.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(item => new ParticipantEventListItem(item.Event, item.ParticipationStatus))
+            .ToListAsync(ct);
+
+        return new PagedResult<ParticipantEventListItem>(items, totalCount);
+    }
+
+    public async Task<EventParticipation?> GetParticipationAsync(int eventId, Guid userId, CancellationToken ct = default)
+        => await _db.EventParticipations.FindAsync([eventId, userId], ct);
+
+    public async Task AddParticipationAsync(EventParticipation participation, CancellationToken ct = default)
+        => await _db.EventParticipations.AddAsync(participation, ct);
+
     public async Task AddAsync(Event eventItem, CancellationToken ct = default)
         => await _db.Events.AddAsync(eventItem, ct);
 

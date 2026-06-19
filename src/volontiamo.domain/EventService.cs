@@ -25,6 +25,29 @@ public record EventResponse(
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
+public enum ParticipantEventListMode
+{
+    Available = 0,
+    Refused = 1
+}
+
+public record ParticipantEventListRequest(
+    Guid UserId,
+    ParticipantEventListMode Mode,
+    int Page,
+    int PageSize);
+
+public record ParticipantEventResponse(
+    int Id,
+    string Name,
+    DateTime StartAtUtc,
+    DateTime EndAtUtc,
+    string? Location,
+    string OperationalNotesMarkdown,
+    EventParticipationStatus? ParticipationStatus);
+
+public record SetEventParticipationRequest(Guid UserId, EventParticipationStatus Status);
+
 public sealed class EventService
 {
     private static readonly IReadOnlySet<EventStatus> DefaultStatuses = new HashSet<EventStatus>
@@ -34,8 +57,13 @@ public sealed class EventService
     };
 
     private readonly IEventRepository _repository;
+    private readonly TimeProvider _timeProvider;
 
-    public EventService(IEventRepository repository) => _repository = repository;
+    public EventService(IEventRepository repository, TimeProvider? timeProvider = null)
+    {
+        _repository = repository;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     public async Task<Result<EventResponse>> CreateAsync(CreateEventRequest request, CancellationToken ct = default)
     {
@@ -88,6 +116,48 @@ public sealed class EventService
         return Result<bool>.Success(true);
     }
 
+    public async Task<PagedResponse<ParticipantEventResponse>> ListParticipantEventsAsync(ParticipantEventListRequest request, CancellationToken ct = default)
+    {
+        var page = request.Page < 1 ? 1 : request.Page;
+        var pageSize = request.PageSize < 1 ? 10 : request.PageSize;
+        if (pageSize > 100) pageSize = 100;
+
+        var filter = new ParticipantEventListFilter(
+            request.UserId,
+            request.Mode,
+            _timeProvider.GetUtcNow().UtcDateTime);
+
+        var result = await _repository.ListParticipantEventsAsync(filter, page, pageSize, ct);
+        var items = result.Items.Select(MapToParticipantResponse).ToList();
+        return new PagedResponse<ParticipantEventResponse>(items, page, pageSize, result.TotalCount);
+    }
+
+    public async Task<Result<ParticipantEventResponse>> SetParticipationAsync(int eventId, SetEventParticipationRequest request, CancellationToken ct = default)
+    {
+        var eventItem = await _repository.GetByIdAsync(eventId, ct);
+        if (eventItem is null)
+            return Result<ParticipantEventResponse>.NotFound();
+
+        var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
+        if (!IsSelectable(eventItem, nowUtc))
+            return Result<ParticipantEventResponse>.Conflict("Event is not selectable.");
+
+        var participation = await _repository.GetParticipationAsync(eventId, request.UserId, ct);
+        if (participation is null)
+        {
+            participation = EventParticipation.Create(eventId, request.UserId, request.Status, nowUtc);
+            await _repository.AddParticipationAsync(participation, ct);
+        }
+        else
+        {
+            participation.ChangeStatus(request.Status, nowUtc);
+        }
+
+        await _repository.SaveChangesAsync(ct);
+
+        return Result<ParticipantEventResponse>.Success(MapToParticipantResponse(eventItem, participation.Status));
+    }
+
     private static List<ValidationError> ValidateCreate(CreateEventRequest r)
     {
         var errors = new List<ValidationError>();
@@ -114,5 +184,29 @@ public sealed class EventService
             eventItem.Status,
             eventItem.CreatedAt,
             eventItem.UpdatedAt);
+    }
+
+    private static bool IsSelectable(Event eventItem, DateTime nowUtc)
+    {
+        return eventItem.Status == EventStatus.Active
+            && !eventItem.IsDeleted
+            && eventItem.StartAtUtc > nowUtc;
+    }
+
+    private static ParticipantEventResponse MapToParticipantResponse(ParticipantEventListItem item)
+    {
+        return MapToParticipantResponse(item.Event, item.ParticipationStatus);
+    }
+
+    private static ParticipantEventResponse MapToParticipantResponse(Event eventItem, EventParticipationStatus? participationStatus)
+    {
+        return new ParticipantEventResponse(
+            eventItem.Id,
+            eventItem.Name,
+            eventItem.StartAtUtc,
+            eventItem.EndAtUtc,
+            eventItem.Location,
+            eventItem.OperationalNotesMarkdown,
+            participationStatus);
     }
 }
