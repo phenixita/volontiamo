@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using volontiamo.domain;
 
 namespace volontiamo.api.Users;
 

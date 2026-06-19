@@ -1,4 +1,4 @@
-namespace volontiamo.api.Users;
+namespace volontiamo.domain;
 
 public record ValidationError(string Field, string Message);
 

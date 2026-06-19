@@ -1,9 +1,13 @@
 ## Stile architetturale API
 
 - Monolite modulare
+- volontiamo.api è solo per esporre endpoint REST, non deve contenere logica di business
+- volontiamo.domain contiene dominio applicativo, entità, logica di business e regole di validazione...
 - Hai a disposizione Docker
 - Test driven developer is THE KEY TO SUCCESS!!! USE IT!!!
 - Le cose devono essere testate e sviluppate col livello di test più basso possibile (unit test) e solo se non è possibile fare unit test si passa a integration test.
+- A ogni modifica dei sorgenti esegui i test pertinenti in ordine L0 e L1 e assicurati che passino tutti prima di fare il commit.
+- Nei test L0 evita utilizza strutture in memoria usando implementazioni dedicate: evita uso di librerie di mocking e stub, crea implementazioni dedicate per i test. Ad esempio, se hai un repository che interagisce con un database, crea un'implementazione in memoria del repository per i test L0.
 
 # Test taxonomy
 - L0: unit test (testa una singola funzione o metodo completamente in memoria)

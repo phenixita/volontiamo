@@ -1,9 +1,11 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/volontiamo.api/volontiamo.api.csproj" />
+    <Project Path="src/volontiamo.domain.test.L0/volontiamo.domain.test.L0.csproj" />
     <Project Path="src/volontiamo.domain/volontiamo.domain.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="src/volontiamo.domain.test.L0/volontiamo.domain.test.L0.csproj" />
     <Project Path="src/volontiamo.api.tests.L1/volontiamo.api.tests.L1.csproj" />
   </Folder>
 </Solution>
