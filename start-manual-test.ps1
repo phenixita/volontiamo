@@ -34,6 +34,93 @@ function Get-PowerShellExecutable {
     throw 'Nessuna shell PowerShell disponibile.'
 }
 
+function Test-CommandLineContainsAll {
+    param(
+        [AllowNull()][string]$CommandLine,
+        [string[]]$Parts
+    )
+
+    if ([string]::IsNullOrWhiteSpace($CommandLine)) {
+        return $false
+    }
+
+    foreach ($part in $Parts) {
+        if ($CommandLine.IndexOf($part, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
+function Stop-ProcessTree {
+    param(
+        [string]$Name,
+        [string[]]$CommandLineParts
+    )
+
+    $processes = @(Get-CimInstance Win32_Process)
+    $matches = @($processes | Where-Object { Test-CommandLineContainsAll -CommandLine $_.CommandLine -Parts $CommandLineParts })
+
+    if ($matches.Count -eq 0) {
+        Write-Host "Nessun processo $Name gia' avviato trovato."
+        return
+    }
+
+    $processesByParentId = @{}
+    foreach ($process in $processes) {
+        if (-not $processesByParentId.ContainsKey($process.ParentProcessId)) {
+            $processesByParentId[$process.ParentProcessId] = New-Object System.Collections.Generic.List[object]
+        }
+
+        $processesByParentId[$process.ParentProcessId].Add($process)
+    }
+
+    $processesToStopById = @{}
+    $pending = New-Object System.Collections.Generic.Queue[object]
+    foreach ($match in $matches) {
+        $pending.Enqueue($match)
+    }
+
+    while ($pending.Count -gt 0) {
+        $process = $pending.Dequeue()
+        if ($processesToStopById.ContainsKey($process.ProcessId)) {
+            continue
+        }
+
+        $processesToStopById[$process.ProcessId] = $process
+
+        if ($processesByParentId.ContainsKey($process.ProcessId)) {
+            foreach ($childProcess in $processesByParentId[$process.ProcessId]) {
+                $pending.Enqueue($childProcess)
+            }
+        }
+    }
+
+    $processesToStop = @($processesToStopById.Values | Sort-Object ProcessId -Descending)
+
+    if ($DryRun) {
+        Write-Host "[DRY-RUN] Arresto $Name"
+        foreach ($process in $processesToStop) {
+            Write-Host "  PID $($process.ProcessId): $($process.Name)"
+        }
+        return
+    }
+
+    foreach ($process in $processesToStop) {
+        try {
+            Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
+        }
+        catch [Microsoft.PowerShell.Commands.ProcessCommandException] {
+            if ($_.Exception.Message -notmatch 'Cannot find a process') {
+                throw
+            }
+        }
+    }
+
+    Write-Host "Arrestato $Name"
+}
+
 function Start-AppProcess {
     param(
         [string]$Name,
@@ -67,6 +154,10 @@ Assert-PathExists -Path $webDir -Description 'Directory web'
 $powerShellExecutable = Get-PowerShellExecutable
 
 $env:ASPNETCORE_ENVIRONMENT="Development"
+
+Stop-ProcessTree -Name 'API' -CommandLineParts @('dotnet run --project', $apiProject)
+Stop-ProcessTree -Name 'Mobile' -CommandLineParts @($mobileDir, 'npm start')
+Stop-ProcessTree -Name 'Web' -CommandLineParts @($webDir, 'npm run dev')
 
 Start-AppProcess -Name 'API' -WorkingDirectory $repoRoot -Command "dotnet run --project `"$apiProject`"" -PowerShellExecutable $powerShellExecutable
 Start-AppProcess -Name 'Mobile' -WorkingDirectory $mobileDir -Command 'npm start' -PowerShellExecutable $powerShellExecutable

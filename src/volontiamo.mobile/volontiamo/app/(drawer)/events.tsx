@@ -106,19 +106,6 @@ export default function EventsScreen() {
     loadEvents(1, true).finally(() => setLoading(false));
   }, [loadEvents, status]);
 
-  if (status === 'loading') {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.brand.red} />
-        <Text style={styles.loadingText}>Apertura sessione...</Text>
-      </View>
-    );
-  }
-
-  if (status === 'unauthenticated') {
-    return <Redirect href="/" />;
-  }
-
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadEvents(1, true);
@@ -131,6 +118,19 @@ export default function EventsScreen() {
     await loadEvents(page + 1, false);
     setLoadingMore(false);
   }, [loadingMore, events.length, totalCount, page, loadEvents]);
+
+  if (status === 'loading') {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.brand.red} />
+        <Text style={styles.loadingText}>Apertura sessione...</Text>
+      </View>
+    );
+  }
+
+  if (status === 'unauthenticated') {
+    return <Redirect href="/" />;
+  }
 
   if (loading) {
     return (
