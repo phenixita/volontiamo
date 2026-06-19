@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using volontiamo.api.Events;
 using volontiamo.api.Persistence;
 using volontiamo.api.Users;
 using volontiamo.domain;
@@ -10,6 +11,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<IEventRepository, EventRepository>();
+builder.Services.AddScoped<EventService>();
 
 builder.Services.AddProblemDetails();
 
@@ -22,6 +25,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseStatusCodePages();
 app.MapUserEndpoints();
+app.MapEventEndpoints();
 
 app.Run();
 
