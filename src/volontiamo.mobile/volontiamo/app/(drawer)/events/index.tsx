@@ -57,27 +57,11 @@ function EventCard({ event, isUpdating, onSetParticipation, onShowDetails }: Eve
       <View style={styles.actions}>
         <Pressable
           accessibilityRole="button"
-          disabled={isUpdating || acceptedSelected}
-          onPress={() => onSetParticipation(event.id, 'Accepted')}
-          style={({ pressed }) => [
-            styles.actionButton,
-            acceptedSelected && styles.actionButtonSelected,
-            (isUpdating || acceptedSelected) && styles.actionButtonDisabled,
-            pressed && !acceptedSelected && styles.actionButtonPressed,
-          ]}
-        >
-          <Text style={[styles.actionText, acceptedSelected && styles.actionTextSelected]}>
-            Partecipo
-          </Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
           disabled={isUpdating || refusedSelected}
           onPress={() => onSetParticipation(event.id, 'Refused')}
           style={({ pressed }) => [
             styles.actionButton,
-            refusedSelected && styles.actionButtonSelected,
+            refusedSelected && styles.refuseButtonSelected,
             (isUpdating || refusedSelected) && styles.actionButtonDisabled,
             pressed && !refusedSelected && styles.actionButtonPressed,
           ]}
@@ -85,10 +69,27 @@ function EventCard({ event, isUpdating, onSetParticipation, onShowDetails }: Eve
           {isUpdating ? (
             <ActivityIndicator size="small" color={colors.brand.red} />
           ) : (
-            <Text style={[styles.actionText, refusedSelected && styles.actionTextSelected]}>
+            <Text style={[styles.actionText, refusedSelected && styles.refuseTextSelected]}>
               Rifiuto
             </Text>
           )}
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={isUpdating || acceptedSelected}
+          onPress={() => onSetParticipation(event.id, 'Accepted')}
+          style={({ pressed }) => [
+            styles.actionButton,
+            styles.acceptButton,
+            acceptedSelected && styles.acceptButtonSelected,
+            (isUpdating || acceptedSelected) && styles.actionButtonDisabled,
+            pressed && !acceptedSelected && styles.actionButtonPressed,
+          ]}
+        >
+          <Text style={[styles.actionText, styles.acceptText, acceptedSelected && styles.acceptTextSelected]}>
+            Partecipo
+          </Text>
         </Pressable>
       </View>
 
@@ -402,6 +403,18 @@ const styles = StyleSheet.create({
     borderColor: colors.brand.red,
     backgroundColor: colors.brand.redSoft,
   },
+  acceptButton: {
+    borderColor: colors.positive.green,
+    backgroundColor: colors.positive.greenSoft,
+  },
+  acceptButtonSelected: {
+    borderColor: colors.positive.greenDeep,
+    backgroundColor: colors.positive.green,
+  },
+  refuseButtonSelected: {
+    borderColor: colors.brand.red,
+    backgroundColor: colors.brand.redSoft,
+  },
   actionButtonDisabled: {
     opacity: 0.72,
   },
@@ -414,6 +427,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   actionTextSelected: {
+    color: colors.brand.red,
+  },
+  acceptText: {
+    color: colors.positive.greenDeep,
+  },
+  acceptTextSelected: {
+    color: colors.text.inverse,
+  },
+  refuseTextSelected: {
     color: colors.brand.red,
   },
   detailsButton: {

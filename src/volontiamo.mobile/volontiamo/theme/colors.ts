@@ -5,6 +5,11 @@ export const colors = {
     redSoft: '#f9d9dc',
     redGlow: 'rgba(214, 32, 42, 0.16)',
   },
+  positive: {
+    green: '#1f8a4c',
+    greenDeep: '#176b3b',
+    greenSoft: '#d7f0e0',
+  },
   background: {
     page: '#efe8de',
     shell: '#f9f4ec',
