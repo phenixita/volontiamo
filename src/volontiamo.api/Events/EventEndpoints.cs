@@ -23,6 +23,7 @@ public static class EventEndpoints
         group.MapDelete("/{id:int}", DeleteEvent);
         group.MapPut("/{eventId:int}/candidates/{userId:guid}/accept", AcceptCandidate);
         group.MapPut("/{eventId:int}/candidates/{userId:guid}/reject", RejectCandidate);
+        group.MapDelete("/{eventId:int}/candidates/{userId:guid}/reject", UndoRejectCandidate);
     }
 
     private static async Task<IResult> CreateEvent(
@@ -317,6 +318,36 @@ public static class EventEndpoints
         }
 
         var result = await service.RejectCandidateAsync(eventId, userId, ct);
+        return result.Status switch
+        {
+            ResultStatus.Ok => Results.NoContent(),
+            ResultStatus.NotFound => Results.Problem(detail: "Event not found.", statusCode: 404, title: "Not Found"),
+            ResultStatus.Conflict => Results.Problem(detail: result.ErrorMessage, statusCode: 409, title: "Conflict"),
+            _ => Results.StatusCode(500)
+        };
+    }
+
+    private static async Task<IResult> UndoRejectCandidate(
+        int eventId,
+        Guid userId,
+        HttpContext context,
+        [FromServices] AuthenticationService authService,
+        [FromServices] EventService service,
+        CancellationToken ct)
+    {
+        var currentUser = await GetCurrentUserAsync(context, authService, ct);
+        if (currentUser.Error is not null)
+            return currentUser.Error;
+
+        if (currentUser.User!.UserType != UserType.Lilt)
+        {
+            return Results.Problem(
+                detail: "Only backoffice users can manage event candidacies.",
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Forbidden");
+        }
+
+        var result = await service.UndoRejectCandidateAsync(eventId, userId, ct);
         return result.Status switch
         {
             ResultStatus.Ok => Results.NoContent(),

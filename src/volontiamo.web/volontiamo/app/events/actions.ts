@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { EventStatus } from "@/lib/events/contracts";
-import { acceptCandidate, createEvent, deleteEvent, rejectCandidate, updateEvent } from "@/lib/events/http-events-adapter";
+import { acceptCandidate, createEvent, deleteEvent, rejectCandidate, undoRejectCandidate, updateEvent } from "@/lib/events/http-events-adapter";
 
 const ROME_TIME_ZONE = "Europe/Rome";
 
@@ -157,6 +157,17 @@ export async function acceptCandidateAction(eventId: number, userId: string) {
 
 export async function rejectCandidateAction(eventId: number, userId: string) {
   const result = await rejectCandidate(eventId, userId);
+  if (!result.ok) {
+    redirect(`/events/${eventId}?error=${encodeURIComponent(result.message)}`);
+  }
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/events");
+  redirect(`/events/${eventId}`);
+}
+
+export async function undoRejectCandidateAction(eventId: number, userId: string) {
+  const result = await undoRejectCandidate(eventId, userId);
   if (!result.ok) {
     redirect(`/events/${eventId}?error=${encodeURIComponent(result.message)}`);
   }

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
 import { AppShell } from "@/app/components/app-shell";
-import { acceptCandidateAction, deleteEventAction, rejectCandidateAction } from "@/app/events/actions";
+import { acceptCandidateAction, deleteEventAction, rejectCandidateAction, undoRejectCandidateAction } from "@/app/events/actions";
 import { requireCurrentUser } from "@/lib/auth/session";
 import type { EventDetailDto, EventVolunteerDto } from "@/lib/events/contracts";
 import { readEventDetail } from "@/lib/events/http-events-adapter";
@@ -160,6 +160,13 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
           title="Rifiutata"
           emptyMessage="Nessuna candidatura rifiutata per questo evento."
           participants={eventDetail.rifiutataParticipants}
+          actions={(participant) => (
+            <form action={undoRejectCandidateAction.bind(null, eventDetail.id, participant.userId)}>
+              <button type="submit" className="rounded-full border border-[var(--border-subtle)] bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
+                Annulla rifiuto
+              </button>
+            </form>
+          )}
         />
 
         <div className="mt-6 flex flex-col gap-3 border-t border-[var(--border-subtle)] pt-5 sm:flex-row sm:items-center sm:justify-end">

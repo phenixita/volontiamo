@@ -523,6 +523,49 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
+    [Fact]
+    public async Task UndoRejectCandidate_WhenParticipationIsRifiutata_ReturnsNoContentAndRestoresAvailability()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var token = Guid.NewGuid().ToString("N");
+        var eventItem = await CreateEventAsync(ValidCreateRequest(name: $"{token} undo-rifiuto", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+
+        var volunteer = await CreateUserCredentialsAsync($"vol-{Guid.NewGuid():N}@volontiamo.local", "Volontiamo123!", UserType.Volontario);
+        await InsertParticipationAsync(eventItem.Id, volunteer.Id, EventParticipationStatus.Rifiutata);
+
+        await AuthenticateAsSeedUserAsync();
+        var undoResponse = await UndoRejectCandidateAsync(eventItem.Id, volunteer.Id);
+        var detailResponse = await _client.GetAsync($"/api/v1/events/{eventItem.Id}");
+
+        await AuthenticateAsAsync(volunteer.Email, volunteer.Password);
+        var myEventsResponse = await _client.GetAsync("/api/v1/events/my?view=available&page=1&pageSize=100");
+
+        Assert.Equal(HttpStatusCode.NoContent, undoResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, myEventsResponse.StatusCode);
+
+        var detail = await detailResponse.Content.ReadFromJsonAsync<EventDetailResponse>();
+        var myEvents = await myEventsResponse.Content.ReadFromJsonAsync<PagedResponse<ParticipantEventResponse>>();
+
+        Assert.NotNull(detail);
+        Assert.NotNull(myEvents);
+        Assert.DoesNotContain(detail!.RifiutataParticipants, p => p.UserId == volunteer.Id);
+
+        var restoredEvent = Assert.Single(myEvents!.Items, item => item.Id == eventItem.Id);
+        Assert.Null(restoredEvent.ParticipationStatus);
+    }
+
+    [Fact]
+    public async Task UndoRejectCandidate_WhenParticipationIsMissing_ReturnsConflict()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var eventItem = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+
+        var response = await UndoRejectCandidateAsync(eventItem.Id, Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
     private async Task<EventResponse> CreateEventAsync(CreateEventRequest request)
     {
         var response = await _client.PostAsJsonAsync("/api/v1/events", request);
@@ -595,6 +638,9 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
 
     private Task<HttpResponseMessage> RejectCandidateAsync(int eventId, Guid userId)
         => _client.PutAsJsonAsync($"/api/v1/events/{eventId}/candidates/{userId}/reject", new { });
+
+    private Task<HttpResponseMessage> UndoRejectCandidateAsync(int eventId, Guid userId)
+        => _client.DeleteAsync($"/api/v1/events/{eventId}/candidates/{userId}/reject");
 
     private static CreateEventRequest ValidCreateRequest(
         string? name = null,

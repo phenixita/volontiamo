@@ -394,3 +394,36 @@ export async function rejectCandidate(eventId: number, userId: string): Promise<
 
   return { ok: true };
 }
+
+export async function undoRejectCandidate(eventId: number, userId: string): Promise<EventMutationResult> {
+  const baseUrlResult = readApiBaseUrl();
+  if (!baseUrlResult.ok) {
+    return { ok: false, kind: "configuration", message: baseUrlResult.message };
+  }
+
+  const token = await readSessionToken();
+  if (!token) {
+    return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
+  }
+
+  const url = new URL(`${EVENTS_ROUTE}/${eventId}/candidates/${userId}/reject`, baseUrlResult.value);
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      method: "DELETE",
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    return { ok: false, kind: "network", message: "Backend non raggiungibile durante l'annullamento del rifiuto candidatura." };
+  }
+
+  if (!response.ok) {
+    const detail = await readHttpErrorMessage(response);
+    const baseMessage = `Annullamento rifiuto candidatura fallito (${response.status}).`;
+    return { ok: false, kind: "http", statusCode: response.status, message: detail ? `${baseMessage} ${detail}` : baseMessage };
+  }
+
+  return { ok: true };
+}

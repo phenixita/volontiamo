@@ -258,6 +258,22 @@ public sealed class EventService
         return await FinalizeCandidateAsync(eventId, userId, EventParticipationStatus.Rifiutata, ct);
     }
 
+    public async Task<Result<bool>> UndoRejectCandidateAsync(int eventId, Guid userId, CancellationToken ct = default)
+    {
+        var resolution = await GetSelectableEventAsync<bool>(eventId, ct);
+        if (resolution.Error is not null)
+            return resolution.Error;
+
+        var participation = await _repository.GetParticipationAsync(eventId, userId, ct);
+        if (participation is null || participation.Status != EventParticipationStatus.Rifiutata)
+            return Result<bool>.Conflict("Only rejected candidates can be restored to available status.");
+
+        await _repository.RemoveParticipationAsync(participation, ct);
+        await _repository.SaveChangesAsync(ct);
+
+        return Result<bool>.Success(true);
+    }
+
     private static List<ValidationError> ValidateEvent(string name, DateTime startAtUtc, DateTime endAtUtc)
     {
         var errors = new List<ValidationError>();
