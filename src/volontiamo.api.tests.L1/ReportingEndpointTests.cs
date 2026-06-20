@@ -22,7 +22,7 @@ public class ReportingEndpointTests : IClassFixture<PostgresWebApplicationFactor
     }
 
     [Fact]
-    public async Task Summary_ForStaffAggregatesConcludedEventsPartecipaHoursAndContributors()
+    public async Task Summary_ForStaffAggregatesConcludedEventsAcceptedHoursAndContributors()
     {
         await AuthenticateAsSeedUserAsync();
         var token = Guid.NewGuid().ToString("N");
@@ -34,9 +34,12 @@ public class ReportingEndpointTests : IClassFixture<PostgresWebApplicationFactor
         var secondEvent = await CreateEventAsync(ValidCreateRequest(name: $"{token} second", status: EventStatus.Active, startAtUtc: Utc(2026, 7, 11, 9), durationHours: 2));
         var thirdEvent = await CreateEventAsync(ValidCreateRequest(name: $"{token} third", status: EventStatus.Concluded, startAtUtc: Utc(2026, 7, 12, 9), durationHours: 3));
 
-        await SetParticipationAsync(firstEvent.Id, firstVolunteer.User.Id, EventParticipationStatus.Partecipa);
-        await SetParticipationAsync(secondEvent.Id, firstVolunteer.User.Id, EventParticipationStatus.Partecipa);
-        await SetParticipationAsync(firstEvent.Id, secondVolunteer.User.Id, EventParticipationStatus.Partecipa);
+        await AuthenticateAsVolunteerAsync(firstVolunteer.Email, firstVolunteer.Password);
+        await SetParticipationAsync(firstEvent.Id, EventParticipationStatus.Accepted);
+        await SetParticipationAsync(secondEvent.Id, EventParticipationStatus.Accepted);
+
+        await AuthenticateAsVolunteerAsync(secondVolunteer.Email, secondVolunteer.Password);
+        await SetParticipationAsync(firstEvent.Id, EventParticipationStatus.Accepted);
 
         await AuthenticateAsSeedUserAsync();
         var liltUser = await CreateUserAsync(
@@ -44,7 +47,7 @@ public class ReportingEndpointTests : IClassFixture<PostgresWebApplicationFactor
             userType: UserType.Lilt,
             firstName: "Lilt",
             lastName: "Staff");
-        await InsertParticipationAsync(firstEvent.Id, liltUser.User.Id, EventParticipationStatus.Partecipa);
+        await InsertParticipationAsync(firstEvent.Id, liltUser.User.Id, EventParticipationStatus.Accepted);
 
         await AuthenticateAsSeedUserAsync();
         await UpdateEventStatusAsync(firstEvent.Id, $"{token} first", Utc(2026, 7, 10, 8), 4, EventStatus.Concluded);
@@ -76,12 +79,15 @@ public class ReportingEndpointTests : IClassFixture<PostgresWebApplicationFactor
             firstName: "Lilt",
             lastName: "Staff");
 
-        await SetParticipationAsync(firstEvent.Id, topVolunteer.User.Id, EventParticipationStatus.Partecipa);
-        await SetParticipationAsync(secondEvent.Id, topVolunteer.User.Id, EventParticipationStatus.Partecipa);
-        await SetParticipationAsync(firstEvent.Id, secondVolunteer.User.Id, EventParticipationStatus.Partecipa);
+        await AuthenticateAsVolunteerAsync(topVolunteer.Email, topVolunteer.Password);
+        await SetParticipationAsync(firstEvent.Id, EventParticipationStatus.Accepted);
+        await SetParticipationAsync(secondEvent.Id, EventParticipationStatus.Accepted);
+
+        await AuthenticateAsVolunteerAsync(secondVolunteer.Email, secondVolunteer.Password);
+        await SetParticipationAsync(firstEvent.Id, EventParticipationStatus.Accepted);
 
         await AuthenticateAsSeedUserAsync();
-        await InsertParticipationAsync(firstEvent.Id, liltUser.User.Id, EventParticipationStatus.Partecipa);
+        await InsertParticipationAsync(firstEvent.Id, liltUser.User.Id, EventParticipationStatus.Accepted);
 
         await AuthenticateAsSeedUserAsync();
         await UpdateEventStatusAsync(firstEvent.Id, firstEvent.Name, Utc(2026, 8, 5, 8), 4, EventStatus.Concluded);
@@ -113,9 +119,12 @@ public class ReportingEndpointTests : IClassFixture<PostgresWebApplicationFactor
         var firstEvent = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Active, startAtUtc: Utc(2026, 9, 8, 8), durationHours: 300));
         var secondEvent = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Active, startAtUtc: Utc(2026, 9, 9, 8), durationHours: 200));
 
-        await SetParticipationAsync(firstEvent.Id, firstVolunteer.User.Id, EventParticipationStatus.Partecipa);
-        await SetParticipationAsync(secondEvent.Id, firstVolunteer.User.Id, EventParticipationStatus.Partecipa);
-        await SetParticipationAsync(firstEvent.Id, secondVolunteer.User.Id, EventParticipationStatus.Partecipa);
+        await AuthenticateAsVolunteerAsync(firstVolunteer.Email, firstVolunteer.Password);
+        await SetParticipationAsync(firstEvent.Id, EventParticipationStatus.Accepted);
+        await SetParticipationAsync(secondEvent.Id, EventParticipationStatus.Accepted);
+
+        await AuthenticateAsVolunteerAsync(secondVolunteer.Email, secondVolunteer.Password);
+        await SetParticipationAsync(firstEvent.Id, EventParticipationStatus.Accepted);
 
         await AuthenticateAsSeedUserAsync();
         await UpdateEventStatusAsync(firstEvent.Id, firstEvent.Name, Utc(2026, 9, 8, 8), 300, EventStatus.Concluded);
@@ -189,9 +198,11 @@ public class ReportingEndpointTests : IClassFixture<PostgresWebApplicationFactor
         response.EnsureSuccessStatusCode();
     }
 
-    private async Task SetParticipationAsync(int eventId, Guid userId, EventParticipationStatus status)
+    private async Task<ParticipantEventResponse> SetParticipationAsync(int eventId, EventParticipationStatus status)
     {
-        await InsertParticipationAsync(eventId, userId, status);
+        var response = await _client.PutAsJsonAsync($"/api/v1/events/{eventId}/participation", new { status = status.ToString() });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<ParticipantEventResponse>())!;
     }
 
     private async Task<UserCredentials> CreateVolunteerAsync(string email, string firstName = "Vol", string lastName = "Tester")

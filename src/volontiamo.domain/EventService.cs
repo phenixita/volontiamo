@@ -260,13 +260,18 @@ public sealed class EventService
 
     public async Task<Result<bool>> UndoRejectCandidateAsync(int eventId, Guid userId, CancellationToken ct = default)
     {
-        var resolution = await GetSelectableEventAsync<bool>(eventId, ct);
-        if (resolution.Error is not null)
-            return resolution.Error;
+        return await DeleteParticipationAsync(eventId, userId, ct);
+    }
+
+    public async Task<Result<bool>> DeleteParticipationAsync(int eventId, Guid userId, CancellationToken ct = default)
+    {
+        var eventItem = await _repository.GetByIdAsync(eventId, ct);
+        if (eventItem is null || eventItem.IsDeleted)
+            return Result<bool>.NotFound();
 
         var participation = await _repository.GetParticipationAsync(eventId, userId, ct);
-        if (participation is null || participation.Status != EventParticipationStatus.Rifiutata)
-            return Result<bool>.Conflict("Only rejected candidates can be restored to available status.");
+        if (participation is null)
+            return Result<bool>.Conflict("Event participation not found.");
 
         await _repository.RemoveParticipationAsync(participation, ct);
         await _repository.SaveChangesAsync(ct);

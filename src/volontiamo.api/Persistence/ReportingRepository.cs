@@ -38,11 +38,11 @@ public sealed class ReportingRepository : IReportingRepository
         command.CommandText = """
             SELECT
                 COALESCE(EXTRACT(EPOCH FROM e.end_at_utc - e.start_at_utc) / 3600.0, 0)::numeric AS duration_hours,
-                COUNT(u.id)::integer AS participating_volunteers_count
+                COUNT(u.id)::integer AS accepted_participants_count
             FROM events e
             LEFT JOIN event_participations p
                 ON p.event_id = e.id
-               AND p.participation_status = @partecipaStatus
+               AND p.participation_status = @acceptedStatus
             LEFT JOIN users u
                 ON u.id = p.user_id
                AND u.is_deleted = FALSE
@@ -62,8 +62,8 @@ public sealed class ReportingRepository : IReportingRepository
         while (await reader.ReadAsync(ct))
         {
             var durationHours = reader.GetFieldValue<decimal>(0);
-            var participatingVolunteersCount = reader.GetInt32(1);
-            items.Add(new ReportingEventContribution(TimeSpan.FromHours((double)durationHours), participatingVolunteersCount));
+            var acceptedParticipantsCount = reader.GetInt32(1);
+            items.Add(new ReportingEventContribution(TimeSpan.FromHours((double)durationHours), acceptedParticipantsCount));
         }
 
         return items;
@@ -83,7 +83,7 @@ public sealed class ReportingRepository : IReportingRepository
             FROM users u
             LEFT JOIN event_participations p
                 ON p.user_id = u.id
-               AND p.participation_status = @partecipaStatus
+               AND p.participation_status = @acceptedStatus
             LEFT JOIN events e
                 ON e.id = p.event_id
                AND e.is_deleted = FALSE
@@ -115,7 +115,7 @@ public sealed class ReportingRepository : IReportingRepository
     private static void AddCommonParameters(DbCommand command, ReportingFilter filter)
     {
         command.Parameters.Clear();
-        command.Parameters.Add(CreateParameter("partecipaStatus", DbType.Int32, (int)EventParticipationStatus.Partecipa));
+        command.Parameters.Add(CreateParameter("acceptedStatus", DbType.Int32, (int)EventParticipationStatus.Accepted));
         command.Parameters.Add(CreateParameter("concludedStatus", DbType.Int32, (int)EventStatus.Concluded));
         command.Parameters.Add(CreateParameter("volunteerUserType", DbType.Int32, (int)UserType.Volontario));
         command.Parameters.Add(CreateParameter("fromUtc", DbType.DateTime, filter.FromUtc));

@@ -17,13 +17,9 @@ public static class EventEndpoints
         group.MapGet("/", ListEvents);
         group.MapGet("/{id:int}", GetEventDetail);
         group.MapPut("/{id:int}", UpdateEvent);
-        group.MapPut("/{id:int}/participation/candidata", ApplyToEvent);
-        group.MapPut("/{id:int}/participation/non-interessata", MarkEventAsNotInterested);
-        group.MapDelete("/{id:int}/participation/non-interessata", RestoreEventAvailability);
+        group.MapPut("/{id:int}/participation", SetParticipation);
         group.MapDelete("/{id:int}", DeleteEvent);
-        group.MapPut("/{eventId:int}/candidates/{userId:guid}/accept", AcceptCandidate);
-        group.MapPut("/{eventId:int}/candidates/{userId:guid}/reject", RejectCandidate);
-        group.MapDelete("/{eventId:int}/candidates/{userId:guid}/reject", UndoRejectCandidate);
+        group.MapDelete("/{eventId:int}/participants/{userId:guid}", RemoveParticipant);
     }
 
     private static async Task<IResult> CreateEvent(
@@ -93,7 +89,7 @@ public static class EventEndpoints
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["view"] = ["View must be available or non-interessata."]
+                ["view"] = ["View must be available or refused."]
             });
         }
 
@@ -124,9 +120,10 @@ public static class EventEndpoints
         };
     }
 
-    private static async Task<IResult> ApplyToEvent(
+    private static async Task<IResult> SetParticipation(
         int id,
         HttpContext context,
+        [FromBody] EventParticipationStatusRequest request,
         [FromServices] AuthenticationService authService,
         [FromServices] EventService service,
         CancellationToken ct)
@@ -143,7 +140,15 @@ public static class EventEndpoints
                 title: "Forbidden");
         }
 
-        var result = await service.ApplyAsync(id, currentUser.User.Id, ct);
+        if (!TryParseParticipationStatus(request.Status, out var status))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["status"] = ["Status must be Accepted or Refused."]
+            });
+        }
+
+        var result = await service.SetParticipationAsync(id, new SetEventParticipationRequest(currentUser.User.Id, status), ct);
         return result.Status switch
         {
             ResultStatus.Ok => Results.Ok(result.Value),
@@ -153,76 +158,6 @@ public static class EventEndpoints
                 title: "Not Found"),
             ResultStatus.Conflict => Results.Problem(
                 detail: result.ErrorMessage ?? "Event is not selectable.",
-                statusCode: 409,
-                title: "Conflict"),
-            _ => Results.StatusCode(500)
-        };
-    }
-
-    private static async Task<IResult> MarkEventAsNotInterested(
-        int id,
-        HttpContext context,
-        [FromServices] AuthenticationService authService,
-        [FromServices] EventService service,
-        CancellationToken ct)
-    {
-        var currentUser = await GetCurrentUserAsync(context, authService, ct);
-        if (currentUser.Error is not null)
-            return currentUser.Error;
-
-        if (currentUser.User!.UserType != UserType.Volontario)
-        {
-            return Results.Problem(
-                detail: "Only volunteers can change event participation.",
-                statusCode: StatusCodes.Status403Forbidden,
-                title: "Forbidden");
-        }
-
-        var result = await service.MarkAsNotInterestedAsync(id, currentUser.User.Id, ct);
-        return result.Status switch
-        {
-            ResultStatus.Ok => Results.Ok(result.Value),
-            ResultStatus.NotFound => Results.Problem(
-                detail: "Event not found.",
-                statusCode: 404,
-                title: "Not Found"),
-            ResultStatus.Conflict => Results.Problem(
-                detail: result.ErrorMessage ?? "Event participation cannot transition to NonInteressata.",
-                statusCode: 409,
-                title: "Conflict"),
-            _ => Results.StatusCode(500)
-        };
-    }
-
-    private static async Task<IResult> RestoreEventAvailability(
-        int id,
-        HttpContext context,
-        [FromServices] AuthenticationService authService,
-        [FromServices] EventService service,
-        CancellationToken ct)
-    {
-        var currentUser = await GetCurrentUserAsync(context, authService, ct);
-        if (currentUser.Error is not null)
-            return currentUser.Error;
-
-        if (currentUser.User!.UserType != UserType.Volontario)
-        {
-            return Results.Problem(
-                detail: "Only volunteers can change event participation.",
-                statusCode: StatusCodes.Status403Forbidden,
-                title: "Forbidden");
-        }
-
-        var result = await service.RestoreAvailabilityAsync(id, currentUser.User.Id, ct);
-        return result.Status switch
-        {
-            ResultStatus.Ok => Results.Ok(result.Value),
-            ResultStatus.NotFound => Results.Problem(
-                detail: "Event not found.",
-                statusCode: 404,
-                title: "Not Found"),
-            ResultStatus.Conflict => Results.Problem(
-                detail: result.ErrorMessage ?? "Availability cannot be restored for this event.",
                 statusCode: 409,
                 title: "Conflict"),
             _ => Results.StatusCode(500)
@@ -267,92 +202,20 @@ public static class EventEndpoints
         };
     }
 
-    private static async Task<IResult> AcceptCandidate(
+    private static async Task<IResult> RemoveParticipant(
         int eventId,
         Guid userId,
-        HttpContext context,
-        [FromServices] AuthenticationService authService,
         [FromServices] EventService service,
         CancellationToken ct)
     {
-        var currentUser = await GetCurrentUserAsync(context, authService, ct);
-        if (currentUser.Error is not null)
-            return currentUser.Error;
-
-        if (currentUser.User!.UserType != UserType.Lilt)
-        {
-            return Results.Problem(
-                detail: "Only backoffice users can manage event candidacies.",
-                statusCode: StatusCodes.Status403Forbidden,
-                title: "Forbidden");
-        }
-
-        var result = await service.AcceptCandidateAsync(eventId, userId, ct);
+        var result = await service.RemoveParticipantAsync(eventId, userId, ct);
         return result.Status switch
         {
             ResultStatus.Ok => Results.NoContent(),
-            ResultStatus.NotFound => Results.Problem(detail: "Event not found.", statusCode: 404, title: "Not Found"),
-            ResultStatus.Conflict => Results.Problem(detail: result.ErrorMessage, statusCode: 409, title: "Conflict"),
-            _ => Results.StatusCode(500)
-        };
-    }
-
-    private static async Task<IResult> RejectCandidate(
-        int eventId,
-        Guid userId,
-        HttpContext context,
-        [FromServices] AuthenticationService authService,
-        [FromServices] EventService service,
-        CancellationToken ct)
-    {
-        var currentUser = await GetCurrentUserAsync(context, authService, ct);
-        if (currentUser.Error is not null)
-            return currentUser.Error;
-
-        if (currentUser.User!.UserType != UserType.Lilt)
-        {
-            return Results.Problem(
-                detail: "Only backoffice users can manage event candidacies.",
-                statusCode: StatusCodes.Status403Forbidden,
-                title: "Forbidden");
-        }
-
-        var result = await service.RejectCandidateAsync(eventId, userId, ct);
-        return result.Status switch
-        {
-            ResultStatus.Ok => Results.NoContent(),
-            ResultStatus.NotFound => Results.Problem(detail: "Event not found.", statusCode: 404, title: "Not Found"),
-            ResultStatus.Conflict => Results.Problem(detail: result.ErrorMessage, statusCode: 409, title: "Conflict"),
-            _ => Results.StatusCode(500)
-        };
-    }
-
-    private static async Task<IResult> UndoRejectCandidate(
-        int eventId,
-        Guid userId,
-        HttpContext context,
-        [FromServices] AuthenticationService authService,
-        [FromServices] EventService service,
-        CancellationToken ct)
-    {
-        var currentUser = await GetCurrentUserAsync(context, authService, ct);
-        if (currentUser.Error is not null)
-            return currentUser.Error;
-
-        if (currentUser.User!.UserType != UserType.Lilt)
-        {
-            return Results.Problem(
-                detail: "Only backoffice users can manage event candidacies.",
-                statusCode: StatusCodes.Status403Forbidden,
-                title: "Forbidden");
-        }
-
-        var result = await service.UndoRejectCandidateAsync(eventId, userId, ct);
-        return result.Status switch
-        {
-            ResultStatus.Ok => Results.NoContent(),
-            ResultStatus.NotFound => Results.Problem(detail: "Event not found.", statusCode: 404, title: "Not Found"),
-            ResultStatus.Conflict => Results.Problem(detail: result.ErrorMessage, statusCode: 409, title: "Conflict"),
+            ResultStatus.NotFound => Results.Problem(
+                detail: "Event or participation not found.",
+                statusCode: 404,
+                title: "Not Found"),
             _ => Results.StatusCode(500)
         };
     }
@@ -428,10 +291,9 @@ public static class EventEndpoints
             return true;
         }
 
-        if (string.Equals(view, "non-interessata", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(view, "noninteressata", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(view, "refused", StringComparison.OrdinalIgnoreCase))
         {
-            mode = ParticipantEventListMode.NonInteressata;
+            mode = ParticipantEventListMode.Refused;
             return true;
         }
 
@@ -439,5 +301,16 @@ public static class EventEndpoints
         return false;
     }
 
+    private static bool TryParseParticipationStatus(string? rawStatus, out EventParticipationStatus status)
+    {
+        if (Enum.TryParse<EventParticipationStatus>(rawStatus, ignoreCase: true, out status) && Enum.IsDefined(status))
+            return true;
+
+        status = EventParticipationStatus.Accepted;
+        return false;
+    }
+
     private sealed record CurrentUserResolution(AuthenticatedUserResponse? User, IResult? Error);
+
+    private sealed record EventParticipationStatusRequest(string? Status);
 }

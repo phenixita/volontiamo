@@ -395,7 +395,7 @@ export async function rejectCandidate(eventId: number, userId: string): Promise<
   return { ok: true };
 }
 
-export async function undoRejectCandidate(eventId: number, userId: string): Promise<EventMutationResult> {
+export async function deleteParticipation(eventId: number, userId: string): Promise<EventMutationResult> {
   const baseUrlResult = readApiBaseUrl();
   if (!baseUrlResult.ok) {
     return { ok: false, kind: "configuration", message: baseUrlResult.message };
@@ -406,7 +406,7 @@ export async function undoRejectCandidate(eventId: number, userId: string): Prom
     return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
   }
 
-  const url = new URL(`${EVENTS_ROUTE}/${eventId}/candidates/${userId}/reject`, baseUrlResult.value);
+  const url = new URL(`${EVENTS_ROUTE}/${eventId}/participants/${userId}`, baseUrlResult.value);
   let response: Response;
   try {
     response = await fetch(url.toString(), {
@@ -416,12 +416,12 @@ export async function undoRejectCandidate(eventId: number, userId: string): Prom
       headers: { Authorization: `Bearer ${token}` },
     });
   } catch {
-    return { ok: false, kind: "network", message: "Backend non raggiungibile durante l'annullamento del rifiuto candidatura." };
+    return { ok: false, kind: "network", message: "Backend non raggiungibile durante l'eliminazione della partecipazione." };
   }
 
   if (!response.ok) {
     const detail = await readHttpErrorMessage(response);
-    const baseMessage = `Annullamento rifiuto candidatura fallito (${response.status}).`;
+    const baseMessage = `Eliminazione partecipazione fallita (${response.status}).`;
     return { ok: false, kind: "http", statusCode: response.status, message: detail ? `${baseMessage} ${detail}` : baseMessage };
   }
 

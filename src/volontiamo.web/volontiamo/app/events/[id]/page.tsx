@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
 import { AppShell } from "@/app/components/app-shell";
-import { acceptCandidateAction, deleteEventAction, rejectCandidateAction, undoRejectCandidateAction } from "@/app/events/actions";
+import { acceptCandidateAction, deleteEventAction, deleteParticipationAction, rejectCandidateAction } from "@/app/events/actions";
 import { requireCurrentUser } from "@/lib/auth/session";
 import type { EventDetailDto, EventVolunteerDto } from "@/lib/events/contracts";
 import { readEventDetail } from "@/lib/events/http-events-adapter";
@@ -128,6 +128,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
           title="Candidata"
           emptyMessage="Nessuna candidatura aperta per questo evento."
           participants={eventDetail.candidataParticipants}
+          actionsLabel="Gestisci candidatura"
           actions={(participant) => (
             <div className="flex flex-wrap gap-2">
               <form action={acceptCandidateAction.bind(null, eventDetail.id, participant.userId)}>
@@ -140,6 +141,10 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   Rifiuta
                 </button>
               </form>
+              <DeleteParticipationControl
+                action={deleteParticipationAction.bind(null, eventDetail.id, participant.userId)}
+                volunteerName={`${participant.firstName} ${participant.lastName}`}
+              />
             </div>
           )}
         />
@@ -148,24 +153,38 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
           title="Partecipa"
           emptyMessage="Nessun volontario confermato per questo evento."
           participants={eventDetail.partecipaParticipants}
+          actionsLabel="Rimuovi partecipazione"
+          actions={(participant) => (
+            <DeleteParticipationControl
+              action={deleteParticipationAction.bind(null, eventDetail.id, participant.userId)}
+              volunteerName={`${participant.firstName} ${participant.lastName}`}
+            />
+          )}
         />
 
         <ParticipantsSection
-          title="NonInteressata"
+          title="Non interessati"
           emptyMessage="Nessun volontario ha escluso questo evento."
           participants={eventDetail.nonInteressataParticipants}
+          actionsLabel="Rimuovi stato"
+          actions={(participant) => (
+            <DeleteParticipationControl
+              action={deleteParticipationAction.bind(null, eventDetail.id, participant.userId)}
+              volunteerName={`${participant.firstName} ${participant.lastName}`}
+            />
+          )}
         />
 
         <ParticipantsSection
-          title="Rifiutata"
+          title="Rifiutate"
           emptyMessage="Nessuna candidatura rifiutata per questo evento."
           participants={eventDetail.rifiutataParticipants}
+          actionsLabel="Rimuovi rifiuto"
           actions={(participant) => (
-            <form action={undoRejectCandidateAction.bind(null, eventDetail.id, participant.userId)}>
-              <button type="submit" className="rounded-full border border-[var(--border-subtle)] bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
-                Annulla rifiuto
-              </button>
-            </form>
+            <DeleteParticipationControl
+              action={deleteParticipationAction.bind(null, eventDetail.id, participant.userId)}
+              volunteerName={`${participant.firstName} ${participant.lastName}`}
+            />
           )}
         />
 
@@ -202,11 +221,13 @@ function ParticipantsSection({
   title,
   emptyMessage,
   participants,
+  actionsLabel,
   actions,
 }: {
   title: string;
   emptyMessage: string;
   participants: EventVolunteerDto[];
+  actionsLabel: string;
   actions?: (participant: EventVolunteerDto) => React.ReactNode;
 }) {
   return (
@@ -215,31 +236,90 @@ function ParticipantsSection({
       {participants.length === 0 ? (
         <p className="mt-3 text-sm text-[var(--text-soft)]">{emptyMessage}</p>
       ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-[720px] border-collapse">
-            <thead>
-              <tr className="border-b border-[var(--border-subtle)] text-left">
-                <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Nome</th>
-                <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Cognome</th>
-                <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Email</th>
-                <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Telefono</th>
-                {actions ? <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Azioni</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {participants.map((participant) => (
-                <tr key={participant.userId} className="border-b border-[var(--border-subtle)]/70 last:border-b-0">
-                  <td className="px-2 py-3 text-sm font-semibold text-[var(--text-strong)]">{participant.firstName}</td>
-                  <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.lastName}</td>
-                  <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.email}</td>
-                  <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.phone?.trim() || "Non disponibile"}</td>
-                  {actions ? <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{actions(participant)}</td> : null}
+        <>
+          <div className="mt-4 hidden overflow-x-auto md:block">
+            <table className="min-w-[720px] border-collapse">
+              <thead>
+                <tr className="border-b border-[var(--border-subtle)] text-left">
+                  <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Nome</th>
+                  <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Cognome</th>
+                  <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Email</th>
+                  <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Telefono</th>
+                  <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Azioni</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {participants.map((participant) => (
+                  <tr key={participant.userId} className="border-b border-[var(--border-subtle)]/70 last:border-b-0">
+                    <td className="px-2 py-3 text-sm font-semibold text-[var(--text-strong)]">{participant.firstName}</td>
+                    <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.lastName}</td>
+                    <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.email}</td>
+                    <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.phone?.trim() || "Non disponibile"}</td>
+                    <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{actions(participant)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:hidden">
+            {participants.map((participant) => (
+              <article key={participant.userId} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-subtle)] px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--text-strong)]">{participant.firstName} {participant.lastName}</p>
+                    <p className="mt-1 text-sm text-[var(--text-soft)]">{participant.email}</p>
+                    <p className="mt-1 text-sm text-[var(--text-soft)]">{participant.phone?.trim() || "Non disponibile"}</p>
+                  </div>
+                </div>
+                <div className="mt-4 border-t border-[var(--border-subtle)] pt-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">{actionsLabel}</p>
+                  <div className="mt-3">{actions(participant)}</div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
       )}
     </section>
+  );
+}
+
+function DeleteParticipationControl({
+  action,
+  volunteerName,
+}: {
+  action: (formData: FormData) => void | Promise<void>;
+  volunteerName: string;
+}) {
+  return (
+    <details className="group inline-block">
+      <summary className="list-none cursor-pointer rounded-full border border-[var(--border-subtle)] bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
+        <span className="inline-flex items-center gap-2">
+          <TrashIcon />
+          <span>Elimina</span>
+        </span>
+      </summary>
+      <div className="mt-2 w-full min-w-[15rem] rounded-2xl border border-[var(--border-subtle)] bg-white p-3 shadow-[var(--panel-shadow)] sm:w-auto">
+        <p className="text-sm text-[var(--text-soft)]">Confermi la rimozione di {volunteerName} da questo evento?</p>
+        <form action={action} className="mt-3 flex flex-wrap gap-2">
+          <button type="submit" className="rounded-full bg-[var(--brand-red)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-[var(--brand-red-deep)]">
+            Conferma
+          </button>
+        </form>
+      </div>
+    </details>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2">
+      <path d="M4 7h16" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M6 7l1 12h10l1-12" />
+      <path d="M9 7V4h6v3" />
+    </svg>
   );
 }

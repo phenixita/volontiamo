@@ -37,14 +37,7 @@ public class EventRepository : IEventRepository
                 eventItem,
                 _db.EventParticipations.Count(participation =>
                     participation.EventId == eventItem.Id
-                    && participation.Status == EventParticipationStatus.Candidata
-                    && _db.Users.Any(user =>
-                        user.Id == participation.UserId
-                        && !user.IsDeleted
-                        && user.UserType == UserType.Volontario)),
-                _db.EventParticipations.Count(participation =>
-                    participation.EventId == eventItem.Id
-                    && participation.Status == EventParticipationStatus.Partecipa
+                    && participation.Status == EventParticipationStatus.Accepted
                     && _db.Users.Any(user =>
                         user.Id == participation.UserId
                         && !user.IsDeleted
@@ -60,23 +53,23 @@ public class EventRepository : IEventRepository
         if (eventItem is null)
             return null;
 
-          var participants = await (
+        var acceptedParticipants = await (
             from participation in _db.EventParticipations
             join user in _db.Users on participation.UserId equals user.Id
             where participation.EventId == id
+               && participation.Status == EventParticipationStatus.Accepted
                && !user.IsDeleted
                && user.UserType == UserType.Volontario
-            orderby participation.Status, user.LastName, user.FirstName
-            select new EventParticipant(
+            orderby user.LastName, user.FirstName
+            select new EventAcceptedParticipant(
                 user.Id,
                 user.FirstName,
                 user.LastName,
                 user.Email,
-                user.Phone,
-                participation.Status)
+                user.Phone)
         ).ToListAsync(ct);
 
-        return new EventDetailItem(eventItem, participants);
+        return new EventDetailItem(eventItem, acceptedParticipants);
     }
 
     public async Task<PagedResult<ParticipantEventListItem>> ListParticipantEventsAsync(ParticipantEventListFilter filter, int page, int pageSize, CancellationToken ct = default)
@@ -86,8 +79,7 @@ public class EventRepository : IEventRepository
             join participationForUser in _db.EventParticipations.Where(p => p.UserId == filter.UserId)
                 on eventItem.Id equals participationForUser.EventId into participationsForUser
             from participation in participationsForUser.DefaultIfEmpty()
-            where !eventItem.IsDeleted
-                && eventItem.Status == EventStatus.Active
+            where eventItem.Status == EventStatus.Active
                 && eventItem.StartAtUtc > filter.NowUtc
             select new
             {
@@ -97,9 +89,9 @@ public class EventRepository : IEventRepository
                     : participation.Status
             };
 
-        query = filter.Mode == ParticipantEventListMode.NonInteressata
-            ? query.Where(item => item.ParticipationStatus == EventParticipationStatus.NonInteressata)
-            : query.Where(item => item.ParticipationStatus != EventParticipationStatus.NonInteressata);
+        query = filter.Mode == ParticipantEventListMode.Refused
+            ? query.Where(item => item.ParticipationStatus == EventParticipationStatus.Refused)
+            : query.Where(item => item.ParticipationStatus == null || item.ParticipationStatus == EventParticipationStatus.Accepted);
 
         var totalCount = await query.CountAsync(ct);
         var items = await query
@@ -118,12 +110,6 @@ public class EventRepository : IEventRepository
 
     public async Task AddParticipationAsync(EventParticipation participation, CancellationToken ct = default)
         => await _db.EventParticipations.AddAsync(participation, ct);
-
-    public Task RemoveParticipationAsync(EventParticipation participation, CancellationToken ct = default)
-    {
-        _db.EventParticipations.Remove(participation);
-        return Task.CompletedTask;
-    }
 
     public async Task AddAsync(Event eventItem, CancellationToken ct = default)
         => await _db.Events.AddAsync(eventItem, ct);

@@ -6,10 +6,9 @@
 - volontiamo.mobile è un client mobile React Native DEDICATO IN MODO ESCLUSIVO AL VOLONTARIO
 - volontiamo.web è un client web dedicato alla gestione di backoffice e amministrazione dedicato al personale LILT
 - Hai a disposizione Docker
-- Test driven developer is THE KEY TO SUCCESS!!! USE IT!!!
-- Le cose devono essere testate e sviluppate col livello di test più basso possibile (unit test) e solo se non è possibile fare unit test si passa a integration test.
-- A ogni modifica dei sorgenti esegui i test pertinenti in ordine L0 e L1 e assicurati che passino tutti prima di fare il commit.
-- Nei test L0 evita utilizza strutture in memoria usando implementazioni dedicate: evita uso di librerie di mocking e stub, crea implementazioni dedicate per i test. Ad esempio, se hai un repository che interagisce con un database, crea un'implementazione in memoria del repository per i test L0.
+- Preferisci il livello di test più basso possibile: L0 prima di L1.
+- Nei test L0 usa implementazioni dedicate in memoria al posto di mocking e stub quando serve attraversare un seam.
+- Per il workflow operativo TDD del repository usa la skill `volontiamo-tdd-guard`.
 
 # Test taxonomy
 - L0: unit test (testa una singola funzione o metodo completamente in memoria)
