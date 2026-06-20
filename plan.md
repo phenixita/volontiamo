@@ -1,44 +1,56 @@
-## Interview: Reset partecipazioni evento
+## Interview: Notifications V1 Inbox
 
-Uniformare il backoffice a un solo comportamento di reset: il cestino elimina la riga della partecipazione in qualunque stato della partecipazione e in qualunque stato dell'evento, con conferma esplicita prima dell'azione. La via piu semplice e coerente e sostituire il caso d'uso specifico `UndoRejectCandidate` con un caso d'uso generico di cancellazione partecipazione, poi riusarlo nella pagina dettaglio evento per tutte le sezioni.
+Sistema notifiche persistite in PostgreSQL, generiche nel modello ma con un solo trigger iniziale: creazione evento. La V1 resta end-to-end utile per il volontario: generazione atomica in creazione evento, inbox mobile persistita, badge con count unread, stato solo read/unread, niente push, niente realtime, niente backfill storico.
 
 **Steps**
-1. Fase 1, dominio: introdurre in `C:\dev\volontiamo\src\volontiamo.domain\EventService.cs` un caso d'uso generico di rimozione partecipazione, ad esempio `DeleteParticipationAsync(int eventId, Guid userId, CancellationToken ct = default)`, che legge l'evento con `GetByIdAsync`, restituisce `NotFound` se l'evento non esiste o e soft-deleted, legge la partecipazione con `GetParticipationAsync`, restituisce `Conflict` se non esiste, poi chiama `RemoveParticipationAsync` e `SaveChangesAsync` senza imporre vincoli sullo stato dell'evento o della partecipazione.
-2. Fase 1, pulizia del seam dominio: rimuovere o deprecare l'uso di `UndoRejectCandidateAsync`, per evitare due interfacce che fanno la stessa cosa con semantiche diverse. Se rimane temporaneamente per compatibilita interna, deve delegare a `DeleteParticipationAsync`. Depends on 1.
-3. Fase 1, test L0: aggiornare `C:\dev\volontiamo\src\volontiamo.domain.test.L0\EventServiceTests.cs` con casi che coprono cancellazione da `Candidata`, `Partecipa`, `NonInteressata`, `Rifiutata`, evento `Draft`, `Active`, `Concluded`, piu i negativi `evento inesistente` e `partecipazione assente`. Parallel with 2 once the method signature is fixed.
-4. Fase 2, API: sostituire in `C:\dev\volontiamo\src\volontiamo.api\Events\EventEndpoints.cs` la route backoffice specifica del rifiuto con una route generica, ad esempio `DELETE /api/v1/events/{eventId}/participants/{userId}` oppure un naming equivalente coerente con i percorsi esistenti. L'handler deve restare limitato a `UserType.Lilt`, delegare solo a `EventService.DeleteParticipationAsync`, restituire `204 NoContent` su successo, `404` se l'evento non esiste, `409` se la riga partecipazione non esiste. Depends on 1.
-5. Fase 2, regressione seam API: eliminare il vecchio handler `UndoRejectCandidate` e il relativo mapping route, cosi il contratto REST riflette il nuovo concetto di reset generico invece di un caso speciale legato a `Rifiutata`. Depends on 4.
-6. Fase 2, test L1: aggiornare `C:\dev\volontiamo\src\volontiamo.api.tests.L1\EventsEndpointTests.cs` con test end-to-end che seminano partecipazioni in stati diversi e verificano che la DELETE le rimuova dal dettaglio evento; includere almeno un test che confermi la disponibilita lato volontario su `GET /api/v1/events/my?view=available` dopo la cancellazione di una partecipazione esistente, e un test negativo per riga assente. Depends on 4 and parallel with 3.
-7. Fase 3, adapter web: aggiornare `C:\dev\volontiamo\src\volontiamo.web\volontiamo\lib\events\http-events-adapter.ts` sostituendo `undoRejectCandidate` con una funzione generica, ad esempio `deleteParticipation(eventId, userId)`, che invoca la nuova route DELETE, riusa gestione token/network/http gia usata da `acceptCandidate` e `rejectCandidate`, e produce messaggi d'errore coerenti con la cancellazione partecipazione. Depends on 4.
-8. Fase 3, server actions: aggiornare `C:\dev\volontiamo\src\volontiamo.web\volontiamo\app\events\actions.ts` sostituendo `undoRejectCandidateAction` con `deleteParticipationAction(eventId, userId)`, mantenendo `revalidatePath(`/events/${eventId}`)` e `revalidatePath("/events")`, poi redirect alla pagina evento con eventuale errore serializzato in query string. Depends on 7.
-9. Fase 3, UI dettaglio evento: aggiornare `C:\dev\volontiamo\src\volontiamo.web\volontiamo\app\events\[id]\page.tsx` per mostrare una colonna azioni in tutte le sezioni partecipanti (`Candidata`, `Partecipa`, `NonInteressata`, `Rifiutata`), mantenere `Accetta` e `Rifiuta` nella sezione `Candidata`, e aggiungere a fine riga un controllo cestino comune che apre una conferma esplicita prima della submit della server action di cancellazione. Depends on 8.
-10. Fase 3, icona e conferma: poiche in `package.json` non risulta una libreria icone dedicata, usare un piccolo SVG inline o un componente locale minimale per il cestino, evitando nuove dipendenze. Per la conferma, riusare un pattern nativo leggero coerente col codice esistente, ad esempio `details/summary` o un mini pannello inline nella cella azioni, senza introdurre stato client o modali globali. Depends on 9.
-11. Fase 4, rifinitura UX: verificare che il layout resti leggibile su desktop e mobile con piu azioni nella stessa riga, che la conferma non sposti in modo eccessivo la tabella, e che il cestino sia chiaramente associato alla riga corretta. Depends on 9 and 10.
-12. Fase 4, verifica finale: eseguire prima i test L0 mirati del dominio, poi i test L1 API pertinenti, poi una verifica web mirata con lint o typecheck del progetto web se disponibile per la slice toccata. Infine controllare manualmente il flusso su dettaglio evento: conferma cestino, sparizione immediata della riga, aggiornamento contatori e assenza del volontario dalla sezione corretta. Depends on 3, 6, 10 and 11.
+1. Phase 1 — Domain seam and TDD anchor.
+   Identificare `EventService.CreateAsync` come seam che controlla il trigger di business. Introdurre nel dominio una nuova entità notifica con interfaccia piccola e profonda: creazione notifica snapshot, transizione a letto, conteggio unread, mark-all-as-read. Questo blocca tutte le fasi successive.
+2. Phase 1 — L0 tests first. *depends on 1*
+   Aggiungere test L0 in memoria per provare: a) creazione evento genera una notifica per ogni volontario attivo non cancellato; b) utenti Lilt e volontari inattivi/esclusi non ricevono notifiche; c) testo snapshot e `eventId` vengono persistiti; d) `mark as read` e `mark all as read` aggiornano solo le notifiche del chiamante; e) unread count riflette `readAt` nullo/non nullo.
+3. Phase 1 — Domain implementation. *depends on 2*
+   Estendere il dominio con nuovi tipi richiesta/risposta notifiche e un nuovo seam repository per query e comandi notifiche. Modificare `EventService.CreateAsync` per generare le notifiche nello stesso salvataggio dell'evento. Tenere tutta la logica di targeting nel dominio, non negli endpoint.
+4. Phase 2 — Persistence and EF mapping. *depends on 3*
+   Estendere EF Core con tabella notifiche PostgreSQL, indici su `user_id`, `read_at`, `created_at`, FK opzionale/obbligatoria verso evento per `EventCreated`, repository EF per insert massivo e query paginata ordinata dal più recente. Gestire tutto nello stesso `DbContext` per mantenere l'atomicità evento + notifiche.
+5. Phase 2 — API endpoints. *depends on 4*
+   Esporre endpoint autenticati per volontario: lista inbox paginata, unread count, mark single as read, mark all as read. Estrarre l'utente corrente dal token come già fanno gli endpoint eventi personali. Impedire accesso agli utenti non volontari.
+6. Phase 2 — L1 API tests. *depends on 5*
+   Aggiungere test L1 per contratti HTTP e persistenza reale: la creazione evento produce righe notifica; la lista restituisce cronologia completa con stato letto/non letto; il count unread si aggiorna; apertura/mark read e mark-all operano solo sull'utente autenticato.
+7. Phase 3 — Mobile API client and types. *depends on 5, parallel with 6 after API contract is stable*
+   Estendere il client mobile con tipi notifica, funzioni fetch inbox, fetch unread count, mark-as-read, mark-all-as-read. Riutilizzare `PagedResponse<T>` e l'infrastruttura auth esistente.
+8. Phase 3 — Mobile inbox UI. *depends on 7*
+   Aggiungere nuova route drawer Notifiche con lista cronologica persistita, stato visivo read/unread, pull-to-refresh, paginazione coerente con il pattern eventi, azione `Segna tutto come letto`, apertura notifica che marca come letta e naviga al dettaglio evento.
+9. Phase 3 — Mobile badge unread. *depends on 7, parallel with 8 if si definisce un piccolo hook/state condiviso*
+   Mostrare il conteggio unread nel drawer o nell'entry Notifiche. Aggiornare il badge su load, refresh e dopo azioni di lettura; nessun realtime o polling nella V1.
+10. Phase 4 — Final verification. *depends on 6, 8, 9*
+    Eseguire L0 mirati, poi L1 mirati, poi verifica mobile locale del percorso inbox → dettaglio evento → badge aggiornato. Confermare che non esista backfill e che non ci siano push o stati extra nella V1.
 
 **Relevant files**
-- `C:\dev\volontiamo\src\volontiamo.domain\EventService.cs` — seam principale del nuovo caso d'uso `DeleteParticipationAsync`; riuso di `GetByIdAsync`, `GetParticipationAsync`, `RemoveParticipationAsync`, `SaveChangesAsync`.
-- `C:\dev\volontiamo\src\volontiamo.domain\IEventRepository.cs` — confermare che il seam repository gia espone quanto serve, senza allargare inutilmente l'interfaccia.
-- `C:\dev\volontiamo\src\volontiamo.domain.test.L0\EventServiceTests.cs` — estendere copertura unitaria per i diversi stati di partecipazione e stati evento.
-- `C:\dev\volontiamo\src\volontiamo.api\Events\EventEndpoints.cs` — sostituire il caso speciale `UndoRejectCandidate` con l'endpoint generico di cancellazione partecipazione.
-- `C:\dev\volontiamo\src\volontiamo.api.tests.L1\EventsEndpointTests.cs` — verificare DELETE backoffice, dettaglio evento aggiornato e riflesso sul read model volontario.
-- `C:\dev\volontiamo\src\volontiamo.web\volontiamo\lib\events\http-events-adapter.ts` — adattatore HTTP server-side da allineare al nuovo contratto REST.
-- `C:\dev\volontiamo\src\volontiamo.web\volontiamo\app\events\actions.ts` — server action generica per cancellare la partecipazione e revalidare le route evento.
-- `C:\dev\volontiamo\src\volontiamo.web\volontiamo\app\events\[id]\page.tsx` — rendering delle quattro sezioni partecipanti e aggiunta del cestino a fine riga con conferma.
-- `C:\dev\volontiamo\src\volontiamo.web\volontiamo\package.json` — riferimento per non introdurre dipendenze icone non necessarie.
+- `c:\dev\volontiamo\src\volontiamo.domain\EventService.cs` — seam di business dove agganciare la generazione notifiche dopo la creazione evento.
+- `c:\dev\volontiamo\src\volontiamo.domain\IUserRepository.cs` — da estendere o affiancare con query mirata ai volontari attivi non cancellati destinatari.
+- `c:\dev\volontiamo\src\volontiamo.domain.test.L0\EventServiceTests.cs` — primo punto per i test L0 del trigger in creazione evento.
+- `c:\dev\volontiamo\src\volontiamo.api\Persistence\AppDbContext.cs` — mapping EF Core della nuova tabella notifiche e relativi indici/FK.
+- `c:\dev\volontiamo\src\volontiamo.api\Persistence\UserRepository.cs` — query destinatari e collaborazione col nuovo repository notifiche EF.
+- `c:\dev\volontiamo\src\volontiamo.api\Events\EventEndpoints.cs` — riferimento per lo stile endpoint e per il contratto di create event che innesca le notifiche.
+- `c:\dev\volontiamo\src\volontiamo.api.tests.L1\EventsEndpointTests.cs` — punto di partenza per provare l'effetto persistito della create event.
+- `c:\dev\volontiamo\src\volontiamo.mobile\volontiamo\app\_layout.tsx` — drawer root dove aggiungere entry Notifiche e badge unread.
+- `c:\dev\volontiamo\src\volontiamo.mobile\volontiamo\app\(drawer)\events\index.tsx` — pattern UI/refresh/paginazione da riusare per la inbox notifiche.
+- `c:\dev\volontiamo\src\volontiamo.mobile\volontiamo\lib\api.ts` — fetch autenticati, mapping payload, nuove chiamate notifiche.
+- `c:\dev\volontiamo\src\volontiamo.mobile\volontiamo\lib\types.ts` — tipi TS di notifica, unread count e paged response riusata.
 
 **Verification**
-1. Eseguire i test L0 del dominio mirati al servizio eventi, con focus sui nuovi casi di cancellazione partecipazione da tutti gli stati rilevanti.
-2. Eseguire i test L1 API mirati agli endpoint eventi, verificando `204`, `404`, `409` e il refresh del read model sul dettaglio evento e sulla vista volontario disponibile.
-3. Eseguire il controllo statico web disponibile per la slice toccata, preferibilmente lint del progetto Next.js o typecheck equivalente se configurato nel workspace.
-4. Verificare manualmente nella pagina dettaglio evento che il cestino compaia in ogni sezione partecipanti, richieda conferma esplicita, e rimuova correttamente la riga dalla tabella con contatori aggiornati.
-5. Verificare manualmente almeno un caso su evento `Concluso` per confermare la decisione esplicita che il reset backoffice resta consentito in qualunque stato evento.
+1. L0: `dotnet test .\src\volontiamo.domain.test.L0\volontiamo.domain.test.L0.csproj --filter EventServiceTests`
+2. L0 aggiuntivi mirati sul nuovo service/modulo notifiche: test su targeting, snapshot, unread count, mark read, mark all read.
+3. L1: `dotnet test .\src\volontiamo.api.tests.L1\volontiamo.api.tests.L1.csproj --filter EventsEndpointTests|Notifications`
+4. Build/API smoke: avvio locale API e prova del flusso create event -> lista notifiche -> mark read.
+5. Mobile manuale: aprire app Expo Android, verificare drawer badge, inbox cronologica, apertura notifica che segna come letta e naviga al dettaglio evento.
 
 **Decisions**
-- Decisione confermata: il reset significa cancellazione fisica della riga partecipazione, non transizione verso `Candidata` o altro stato.
-- Decisione confermata: il comportamento deve essere disponibile da backoffice per qualunque stato della partecipazione.
-- Decisione confermata: il comportamento deve funzionare anche con evento `Draft` o `Concluded`, non solo `Active`.
-- Decisione confermata: la UI usa un cestino a fine riga con conferma esplicita prima della cancellazione.
-- Scope incluso: dominio, API, test L0/L1 e pagina dettaglio evento web con adapter/server action.
-- Scope escluso: mobile, audit trail, soft-delete delle partecipazioni, bulk actions, nuove dipendenze UI, modali complesse, cambi di schema database.
-- Decisione architetturale raccomandata: sostituire il naming specifico `UndoRejectCandidate` con un seam profondo e generico di cancellazione partecipazione, per evitare semantiche duplicate e rendere il contratto coerente con il nuovo obiettivo di backoffice.
+- Modello dati generico per notifiche, ma nella V1 si implementa solo `EventCreated`.
+- Destinatari: soli volontari attivi e non cancellati (`UserType.Volontario`, `IsActive = true`, `IsDeleted = false`).
+- Consistenza: creazione evento e notifiche nello stesso salvataggio database.
+- Stato: solo unread/read tramite `readAt`; niente archive, delete o mark-as-unread nella V1.
+- UX inbox: cronologia completa, ordinata per data più recente; badge con conteggio unread esatto.
+- Lettura: la notifica diventa letta all'apertura/tap; esiste anche `mark all as read`.
+- Contenuto: snapshot persistito di titolo/testo + `eventId` per aprire il dettaglio evento.
+- Rollout: nessun backfill storico; solo eventi creati dopo il rilascio.
+- Scope V1: backend/API + mobile inbox + badge. Esclusi web backoffice notifiche, push di sistema, realtime, polling, templating avanzato.
