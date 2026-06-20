@@ -1,9 +1,10 @@
 import { Redirect, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { useAuth } from '../../lib/auth';
 import { formatUserType } from '../../lib/types';
 import { colors, typography } from '../../theme';
+import { AppText } from '../../components/AppText';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -29,15 +30,15 @@ export default function ProfileScreen() {
   return (
     <View style={styles.page}>
       <View style={styles.identityCard}>
-        <Text style={styles.name}>{user.firstName} {user.lastName}</Text>
-        <Text style={styles.email}>{user.email}</Text>
+        <AppText style={styles.name}>{user.firstName} {user.lastName}</AppText>
+        <AppText style={styles.email}>{user.email}</AppText>
         <View style={styles.typeBadge}>
-          <Text style={styles.typeText}>{formatUserType(user.userType)}</Text>
+          <AppText style={styles.typeText}>{formatUserType(user.userType)}</AppText>
         </View>
       </View>
 
       <Pressable style={styles.signOutButton} onPress={handleSignOut}>
-        <Text style={styles.signOutText}>Esci</Text>
+        <AppText style={styles.signOutText}>Esci</AppText>
       </Pressable>
     </View>
   );

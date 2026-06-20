@@ -1,8 +1,9 @@
 import { Redirect } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useAuth } from '../lib/auth';
 import { colors, typography } from '../theme';
+import { AppText } from '../components/AppText';
 
 export default function Index() {
   const { status, error: sessionError, signIn } = useAuth();
@@ -15,7 +16,7 @@ export default function Index() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.brand.red} />
-        <Text style={styles.loadingText}>Apertura sessione...</Text>
+        <AppText style={styles.loadingText}>Apertura sessione...</AppText>
       </View>
     );
   }
@@ -46,12 +47,12 @@ export default function Index() {
       style={styles.page}
     >
       <View style={styles.panel}>
-        <Text style={styles.title}>Volontiamo</Text>
-        <Text style={styles.subtitle}>Accesso volontario</Text>
+        <AppText style={styles.title}>Volontiamo</AppText>
+        <AppText style={styles.subtitle}>Accesso volontario</AppText>
 
         <View style={styles.form}>
           <View style={styles.field}>
-            <Text style={styles.label}>Email</Text>
+            <AppText style={styles.label}>Email</AppText>
             <TextInput
               value={email}
               onChangeText={setEmail}
@@ -66,7 +67,7 @@ export default function Index() {
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Password</Text>
+            <AppText style={styles.label}>Password</AppText>
             <TextInput
               value={password}
               onChangeText={setPassword}
@@ -79,7 +80,7 @@ export default function Index() {
           </View>
 
           {formError || sessionError ? (
-            <Text style={styles.errorText}>{formError ?? sessionError}</Text>
+            <AppText style={styles.errorText}>{formError ?? sessionError}</AppText>
           ) : null}
 
           <Pressable
@@ -90,7 +91,7 @@ export default function Index() {
             {submitting ? (
               <ActivityIndicator size="small" color={colors.text.inverse} />
             ) : (
-              <Text style={styles.submitText}>Entra</Text>
+              <AppText style={styles.submitText}>Entra</AppText>
             )}
           </Pressable>
         </View>

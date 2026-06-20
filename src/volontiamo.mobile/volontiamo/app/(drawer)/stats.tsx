@@ -6,7 +6,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 
@@ -14,6 +13,7 @@ import { useAuth } from '../../lib/auth';
 import { fetchMyReport } from '../../lib/api';
 import type { VolunteerReportingResponse } from '../../lib/types';
 import { colors, typography } from '../../theme';
+import { AppText } from '../../components/AppText';
 
 function formatHours(hours: number): string {
   return new Intl.NumberFormat('it-IT', {
@@ -32,9 +32,9 @@ type StatCardProps = {
 function StatCard({ label, value, accent = false, helper }: StatCardProps) {
   return (
     <View style={[styles.statCard, accent && styles.statCardAccent]}>
-      <Text style={[styles.statLabel, accent && styles.statLabelAccent]}>{label}</Text>
-      <Text style={[styles.statValue, accent && styles.statValueAccent]}>{value}</Text>
-      <Text style={[styles.statHelper, accent && styles.statHelperAccent]}>{helper}</Text>
+      <AppText style={[styles.statLabel, accent && styles.statLabelAccent]}>{label}</AppText>
+      <AppText style={[styles.statValue, accent && styles.statValueAccent]}>{value}</AppText>
+      <AppText style={[styles.statHelper, accent && styles.statHelperAccent]}>{helper}</AppText>
     </View>
   );
 }
@@ -77,7 +77,7 @@ export default function StatsScreen() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.brand.red} />
-        <Text style={styles.loadingText}>Apertura statistiche...</Text>
+        <AppText style={styles.loadingText}>Apertura statistiche...</AppText>
       </View>
     );
   }
@@ -90,7 +90,7 @@ export default function StatsScreen() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.brand.red} />
-        <Text style={styles.loadingText}>Caricamento statistiche…</Text>
+        <AppText style={styles.loadingText}>Caricamento statistiche…</AppText>
       </View>
     );
   }
@@ -98,14 +98,14 @@ export default function StatsScreen() {
   if (error || !report) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorEmoji}>⚠️</Text>
-        <Text style={styles.errorTitle}>Statistiche non disponibili</Text>
-        <Text style={styles.errorMessage}>{error ?? 'Risposta rendicontazione non disponibile.'}</Text>
+        <AppText style={styles.errorEmoji}>⚠️</AppText>
+        <AppText style={styles.errorTitle}>Statistiche non disponibili</AppText>
+        <AppText style={styles.errorMessage}>{error ?? 'Risposta rendicontazione non disponibile.'}</AppText>
         <Pressable style={styles.retryButton} onPress={() => {
           setLoading(true);
           loadReport().finally(() => setLoading(false));
         }}>
-          <Text style={styles.retryButtonText}>Riprova</Text>
+          <AppText style={styles.retryButtonText}>Riprova</AppText>
         </Pressable>
       </View>
     );
@@ -124,10 +124,10 @@ export default function StatsScreen() {
       }
     >
       <View style={styles.heroCard}>
-        <Text style={styles.heroEyebrow}>Rendicontazione personale</Text>
-        <Text style={styles.heroTitle}>Le tue ore donate</Text>
-        <Text style={styles.heroValue}>{formatHours(report.totalHours)}</Text>
-        <Text style={styles.heroHelper}>Somma delle durate degli eventi conclusi a cui hai confermato la presenza.</Text>
+        <AppText style={styles.heroEyebrow}>Rendicontazione personale</AppText>
+        <AppText style={styles.heroTitle}>Le tue ore donate</AppText>
+        <AppText style={styles.heroValue}>{formatHours(report.totalHours)}</AppText>
+        <AppText style={styles.heroHelper}>Somma delle durate degli eventi conclusi a cui hai confermato la presenza.</AppText>
       </View>
 
       <View style={styles.statsGrid}>
@@ -145,10 +145,10 @@ export default function StatsScreen() {
       </View>
 
       <View style={styles.noteCard}>
-        <Text style={styles.noteTitle}>Come viene calcolato</Text>
-        <Text style={styles.noteBody}>
+        <AppText style={styles.noteTitle}>Come viene calcolato</AppText>
+        <AppText style={styles.noteBody}>
           Le ore derivano dagli eventi in stato concluso. Per ogni evento viene considerata la durata compresa tra inizio e fine e, per la tua scheda personale, conta solo la tua partecipazione accettata.
-        </Text>
+        </AppText>
       </View>
     </ScrollView>
   );

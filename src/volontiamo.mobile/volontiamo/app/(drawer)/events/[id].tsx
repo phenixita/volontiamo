@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { fetchEventDetailById } from '../../../lib/api';
 import { ParticipantEventResponse, ParticipationStatus } from '../../../lib/types';
 import { formatEventDate, formatEventTime } from '../../../lib/datetime';
 import { colors, typography } from '../../../theme';
+import { AppText } from '../../../components/AppText';
 
 function parseEvent(raw: string | string[] | undefined): ParticipantEventResponse | null {
   if (typeof raw !== 'string') {
@@ -93,7 +94,7 @@ export default function EventDetailScreen() {
         <Stack.Screen options={{ title: 'Dettagli evento' }} />
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.brand.red} />
-          <Text style={styles.loadingText}>Caricamento dettaglio evento…</Text>
+          <AppText style={styles.loadingText}>Caricamento dettaglio evento…</AppText>
         </View>
       </>
     );
@@ -104,11 +105,11 @@ export default function EventDetailScreen() {
       <>
         <Stack.Screen options={{ title: 'Dettagli evento' }} />
         <View style={styles.centered}>
-          <Text style={styles.errorEmoji}>⚠️</Text>
-          <Text style={styles.errorTitle}>Evento non disponibile</Text>
-          <Text style={styles.errorMessage}>
+          <AppText style={styles.errorEmoji}>⚠️</AppText>
+          <AppText style={styles.errorTitle}>Evento non disponibile</AppText>
+          <AppText style={styles.errorMessage}>
             {error ?? 'Impossibile mostrare i dettagli dell&apos;evento. Torna indietro e riprova.'}
-          </Text>
+          </AppText>
         </View>
       </>
     );
@@ -124,46 +125,46 @@ export default function EventDetailScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>{event.name}</Text>
+        <AppText style={styles.title}>{event.name}</AppText>
 
         <View style={styles.statusPill}>
-          <Text style={styles.statusText}>{participationLabel(event.participationStatus)}</Text>
+          <AppText style={styles.statusText}>{participationLabel(event.participationStatus)}</AppText>
         </View>
 
         <View style={styles.infoCard}>
           <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>📅</Text>
+            <AppText style={styles.infoIcon}>📅</AppText>
             <View style={styles.infoTextGroup}>
-              <Text style={styles.infoLabel}>Data</Text>
-              <Text style={styles.infoValue}>{formatEventDate(event.startAtUtc)}</Text>
+              <AppText style={styles.infoLabel}>Data</AppText>
+              <AppText style={styles.infoValue}>{formatEventDate(event.startAtUtc)}</AppText>
             </View>
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>⏰</Text>
+            <AppText style={styles.infoIcon}>⏰</AppText>
             <View style={styles.infoTextGroup}>
-              <Text style={styles.infoLabel}>Orario</Text>
-              <Text style={styles.infoValue}>
+              <AppText style={styles.infoLabel}>Orario</AppText>
+              <AppText style={styles.infoValue}>
                 {formatEventTime(event.startAtUtc)} – {formatEventTime(event.endAtUtc)}
-              </Text>
+              </AppText>
             </View>
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>📍</Text>
+            <AppText style={styles.infoIcon}>📍</AppText>
             <View style={styles.infoTextGroup}>
-              <Text style={styles.infoLabel}>Luogo</Text>
-              <Text style={styles.infoValue}>{event.location ?? 'Non specificato'}</Text>
+              <AppText style={styles.infoLabel}>Luogo</AppText>
+              <AppText style={styles.infoValue}>{event.location ?? 'Non specificato'}</AppText>
             </View>
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Dettagli operativi</Text>
+        <AppText style={styles.sectionTitle}>Dettagli operativi</AppText>
         <View style={styles.notesCard}>
           {hasNotes ? (
             <Markdown style={markdownStyles}>{event.operationalNotesMarkdown}</Markdown>
           ) : (
-            <Text style={styles.notesEmpty}>Nessun dettaglio operativo disponibile.</Text>
+            <AppText style={styles.notesEmpty}>Nessun dettaglio operativo disponibile.</AppText>
           )}
         </View>
       </ScrollView>
@@ -278,6 +279,7 @@ const styles = StyleSheet.create({
 const markdownStyles = StyleSheet.create({
   body: {
     ...typography.body,
+    lineHeight: undefined,
     color: colors.text.strong,
   },
   heading1: {

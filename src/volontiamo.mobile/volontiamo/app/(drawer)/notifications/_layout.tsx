@@ -1,7 +1,8 @@
 import { Stack, useNavigation } from 'expo-router';
 import { DrawerActions } from '@react-navigation/native';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { colors } from '../../../theme';
+import { AppText } from '../../../components/AppText';
 
 function DrawerToggle() {
   const navigation = useNavigation();
@@ -14,7 +15,7 @@ function DrawerToggle() {
       onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
       style={({ pressed }) => [styles.toggle, pressed && styles.togglePressed]}
     >
-      <Text style={styles.toggleIcon}>☰</Text>
+      <AppText style={styles.toggleIcon}>☰</AppText>
     </Pressable>
   );
 }
@@ -29,7 +30,7 @@ export default function NotificationsStackLayout() {
         headerShadowVisible: false,
         headerTintColor: colors.text.strong,
         headerTitleStyle: {
-          fontSize: 17,
+          fontSize: 18,
           fontWeight: '700',
           color: colors.text.strong,
         },

@@ -1,53 +1,59 @@
 import { TextStyle } from 'react-native';
 
+// Le dimensioni e i lineHeight sono pensati per la leggibilità di utenti anziani/ipovedenti.
+// I lineHeight hanno un rapporto generoso (~1.25-1.45) e vengono riscalati a runtime con il
+// font di sistema dal componente AppText, così le righe non si sovrappongono mai quando i font
+// sono ingranditi dalle impostazioni del telefono.
 export const typography = {
   displayLarge: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '700',
-    lineHeight: 34,
-    letterSpacing: -0.3,
+    lineHeight: 38,
+    letterSpacing: 0,
   } satisfies TextStyle,
 
   displayMedium: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
-    lineHeight: 28,
-    letterSpacing: -0.2,
+    lineHeight: 32,
+    letterSpacing: 0,
   } satisfies TextStyle,
 
   titleLarge: {
-    fontSize: 18,
-    fontWeight: '600',
-    lineHeight: 24,
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 28,
     letterSpacing: 0,
   } satisfies TextStyle,
 
   titleMedium: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    lineHeight: 22,
+    lineHeight: 26,
     letterSpacing: 0,
   } satisfies TextStyle,
 
   body: {
+    fontSize: 17,
+    fontWeight: '400',
+    lineHeight: 26,
+    letterSpacing: 0.1,
+  } satisfies TextStyle,
+
+  bodySmall: {
     fontSize: 15,
     fontWeight: '400',
     lineHeight: 22,
     letterSpacing: 0.1,
   } satisfies TextStyle,
 
-  bodySmall: {
-    fontSize: 13,
-    fontWeight: '400',
-    lineHeight: 18,
-    letterSpacing: 0.1,
-  } satisfies TextStyle,
-
   caption: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
-    lineHeight: 14,
-    letterSpacing: 0.8,
+    lineHeight: 18,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
   } satisfies TextStyle,
 } as const;
+
+export type TypographyVariant = keyof typeof typography;

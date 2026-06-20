@@ -6,7 +6,6 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 
@@ -20,6 +19,7 @@ import { formatEventDate, formatEventTime } from '../../../lib/datetime';
 import { useNotifications } from '../../../lib/notifications';
 import { NotificationResponse } from '../../../lib/types';
 import { colors, typography } from '../../../theme';
+import { AppText } from '../../../components/AppText';
 
 const PAGE_SIZE = 15;
 
@@ -60,25 +60,25 @@ function NotificationCard({ notification, opening, onOpen }: NotificationCardPro
     >
       <View style={styles.cardTopRow}>
         <View style={styles.cardTopContent}>
-          <Text style={styles.cardTitle} numberOfLines={2}>
+          <AppText style={styles.cardTitle}>
             {notification.title}
-          </Text>
-          <Text style={styles.cardMeta}>
+          </AppText>
+          <AppText style={styles.cardMeta}>
             {formatEventDate(notification.createdAt)} · {formatEventTime(notification.createdAt)}
-          </Text>
+          </AppText>
         </View>
         {opening ? (
           <ActivityIndicator size="small" color={colors.brand.red} />
         ) : isUnread ? (
           <View style={styles.unreadPill}>
-            <Text style={styles.unreadPillText}>Nuova</Text>
+            <AppText style={styles.unreadPillText}>Nuova</AppText>
           </View>
         ) : null}
       </View>
 
-      <Text style={styles.cardBody}>{notification.body}</Text>
+      <AppText style={styles.cardBody}>{notification.body}</AppText>
 
-      <Text style={styles.cardAction}>APRI EVENTO →</Text>
+      <AppText style={styles.cardAction}>APRI EVENTO →</AppText>
     </Pressable>
   );
 }
@@ -193,10 +193,10 @@ export default function NotificationsScreen() {
   const renderHeader = useCallback(() => (
     <View style={styles.header}>
       <View style={styles.headerTextGroup}>
-        <Text style={styles.headerTitle}>Inbox notifiche</Text>
-        <Text style={styles.headerSubtitle}>
+        <AppText style={styles.headerTitle}>Inbox notifiche</AppText>
+        <AppText style={styles.headerSubtitle}>
           Apri una notifica per segnalarla come letta e saltare al dettaglio evento.
-        </Text>
+        </AppText>
       </View>
 
       <Pressable
@@ -212,13 +212,13 @@ export default function NotificationsScreen() {
         {markingAll ? (
           <ActivityIndicator size="small" color={colors.text.inverse} />
         ) : (
-          <Text style={styles.markAllButtonText}>Segna tutto come letto</Text>
+          <AppText style={styles.markAllButtonText}>Segna tutto come letto</AppText>
         )}
       </Pressable>
 
       {error ? (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorBannerText}>{error}</Text>
+          <AppText style={styles.errorBannerText}>{error}</AppText>
         </View>
       ) : null}
     </View>
@@ -228,7 +228,7 @@ export default function NotificationsScreen() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.brand.red} />
-        <Text style={styles.loadingText}>Apertura sessione...</Text>
+        <AppText style={styles.loadingText}>Apertura sessione...</AppText>
       </View>
     );
   }
@@ -241,7 +241,7 @@ export default function NotificationsScreen() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.brand.red} />
-        <Text style={styles.loadingText}>Caricamento notifiche…</Text>
+        <AppText style={styles.loadingText}>Caricamento notifiche…</AppText>
       </View>
     );
   }
@@ -261,11 +261,11 @@ export default function NotificationsScreen() {
       ListHeaderComponent={renderHeader}
       ListEmptyComponent={(
         <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>🔔</Text>
-          <Text style={styles.emptyTitle}>Nessuna notifica</Text>
-          <Text style={styles.emptyMessage}>
+          <AppText style={styles.emptyEmoji}>🔔</AppText>
+          <AppText style={styles.emptyTitle}>Nessuna notifica</AppText>
+          <AppText style={styles.emptyMessage}>
             Qui troverai gli aggiornamenti sugli eventi appena saranno disponibili.
-          </Text>
+          </AppText>
         </View>
       )}
       onEndReached={handleLoadMore}
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     color: colors.text.soft,
   },
   markAllButton: {
-    minHeight: 42,
+    minHeight: 48,
     borderRadius: 8,
     paddingHorizontal: 14,
     alignItems: 'center',

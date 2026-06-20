@@ -19,8 +19,8 @@ export const colors = {
   },
   text: {
     strong: '#2f2a28',
-    soft: '#6d635e',
-    muted: '#8a7f77',
+    soft: '#574e48',
+    muted: '#6a615b',
     inverse: '#ffffff',
   },
   border: {

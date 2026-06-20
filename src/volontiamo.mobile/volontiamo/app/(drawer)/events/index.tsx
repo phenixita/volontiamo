@@ -6,10 +6,10 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useAuth } from '../../../lib/auth';
+import { AppText } from '../../../components/AppText';
 import { applyForEvent, fetchMyEvents, markEventNotInterested, restoreEventAvailability } from '../../../lib/api';
 import { ParticipantEventListView, ParticipantEventResponse, ParticipationStatus } from '../../../lib/types';
 import { formatEventDate, formatEventTime } from '../../../lib/datetime';
@@ -50,25 +50,25 @@ function EventCard({ event, view, isUpdating, onRunAction, onShowDetails }: Even
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.eventName} numberOfLines={2}>
+        <AppText style={styles.eventName}>
           {event.name}
-        </Text>
+        </AppText>
       </View>
 
       <View style={styles.cardDetails}>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>📅</Text>
-          <Text style={styles.detailValue}>
+          <AppText style={styles.detailLabel}>📅</AppText>
+          <AppText style={styles.detailValue}>
             {formatEventDate(event.startAtUtc)} · {formatEventTime(event.startAtUtc)} – {formatEventTime(event.endAtUtc)}
-          </Text>
+          </AppText>
         </View>
 
         {event.location && (
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>📍</Text>
-            <Text style={styles.detailValue} numberOfLines={1}>
+            <AppText style={styles.detailLabel}>📍</AppText>
+            <AppText style={styles.detailValue}>
               {event.location}
-            </Text>
+            </AppText>
           </View>
         )}
       </View>
@@ -89,16 +89,16 @@ function EventCard({ event, view, isUpdating, onRunAction, onShowDetails }: Even
             {isUpdating ? (
               <ActivityIndicator size="small" color={colors.positive.greenDeep} />
             ) : (
-              <Text style={[styles.actionText, styles.acceptText]}>Torna disponibile</Text>
+              <AppText style={[styles.actionText, styles.acceptText]}>Torna disponibile</AppText>
             )}
           </Pressable>
         </View>
       ) : showStatusBadge ? (
         <View style={styles.statusRow}>
           <View style={[styles.statusBadge, participationStatus === 'Candidata' ? styles.statusBadgeCandidate : styles.statusBadgeFinal]}>
-            <Text style={[styles.statusBadgeText, participationStatus === 'Candidata' ? styles.statusBadgeCandidateText : styles.statusBadgeFinalText]}>
+            <AppText style={[styles.statusBadgeText, participationStatus === 'Candidata' ? styles.statusBadgeCandidateText : styles.statusBadgeFinalText]}>
               {statusBadgeLabel(participationStatus!)}
-            </Text>
+            </AppText>
           </View>
         </View>
       ) : (
@@ -116,7 +116,7 @@ function EventCard({ event, view, isUpdating, onRunAction, onShowDetails }: Even
             {isUpdating ? (
               <ActivityIndicator size="small" color={colors.brand.red} />
             ) : (
-              <Text style={styles.actionText}>Non interessata</Text>
+              <AppText style={styles.actionText}>Non interessata</AppText>
             )}
           </Pressable>
 
@@ -134,7 +134,7 @@ function EventCard({ event, view, isUpdating, onRunAction, onShowDetails }: Even
             {isUpdating ? (
               <ActivityIndicator size="small" color={colors.positive.greenDeep} />
             ) : (
-              <Text style={[styles.actionText, styles.acceptText]}>Candidati</Text>
+              <AppText style={[styles.actionText, styles.acceptText]}>Candidati</AppText>
             )}
           </Pressable>
         </View>
@@ -145,7 +145,7 @@ function EventCard({ event, view, isUpdating, onRunAction, onShowDetails }: Even
         onPress={() => onShowDetails(event)}
         style={({ pressed }) => [styles.detailsButton, pressed && styles.detailsButtonPressed]}
       >
-        <Text style={styles.detailsButtonText}>DETTAGLI →</Text>
+        <AppText style={styles.detailsButtonText}>DETTAGLI →</AppText>
       </Pressable>
     </View>
   );
@@ -256,9 +256,9 @@ export default function EventsScreen() {
         ]}
       >
         <View style={[styles.checkbox, view === 'non-interessata' && styles.checkboxSelected]}>
-          {view === 'non-interessata' && <Text style={styles.checkboxMark}>✓</Text>}
+          {view === 'non-interessata' && <AppText style={styles.checkboxMark}>✓</AppText>}
         </View>
-        <Text style={styles.filterText}>Mostra non interessata</Text>
+        <AppText style={styles.filterText}>Mostra non interessata</AppText>
       </Pressable>
     </View>
   ), [handleViewChange, view]);
@@ -267,7 +267,7 @@ export default function EventsScreen() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.brand.red} />
-        <Text style={styles.loadingText}>Apertura sessione...</Text>
+        <AppText style={styles.loadingText}>Apertura sessione...</AppText>
       </View>
     );
   }
@@ -280,7 +280,7 @@ export default function EventsScreen() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.brand.red} />
-        <Text style={styles.loadingText}>Caricamento eventi…</Text>
+        <AppText style={styles.loadingText}>Caricamento eventi…</AppText>
       </View>
     );
   }
@@ -288,9 +288,9 @@ export default function EventsScreen() {
   if (error) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorEmoji}>⚠️</Text>
-        <Text style={styles.errorTitle}>Impossibile caricare gli eventi</Text>
-        <Text style={styles.errorMessage}>{error}</Text>
+        <AppText style={styles.errorEmoji}>⚠️</AppText>
+        <AppText style={styles.errorTitle}>Impossibile caricare gli eventi</AppText>
+        <AppText style={styles.errorMessage}>{error}</AppText>
       </View>
     );
   }
@@ -312,13 +312,13 @@ export default function EventsScreen() {
       ListHeaderComponent={renderHeader}
       ListEmptyComponent={
         <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>📋</Text>
-          <Text style={styles.emptyTitle}>Nessun evento</Text>
-          <Text style={styles.emptyMessage}>
+          <AppText style={styles.emptyEmoji}>📋</AppText>
+          <AppText style={styles.emptyTitle}>Nessun evento</AppText>
+          <AppText style={styles.emptyMessage}>
             {view === 'non-interessata'
               ? 'Non hai eventi esclusi da recuperare al momento.'
               : 'Non ci sono eventi disponibili al momento.'}
-          </Text>
+          </AppText>
         </View>
       }
       onEndReached={handleLoadMore}
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   filterToggle: {
-    minHeight: 42,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 48,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border.strong,
@@ -511,19 +511,21 @@ const styles = StyleSheet.create({
   },
   detailsButton: {
     marginTop: 10,
-    minHeight: 42,
+    minHeight: 48,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.brand.red,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 10,
-    backgroundColor: colors.brand.red,
+    backgroundColor: colors.brand.redSoft,
   },
   detailsButtonPressed: {
-    opacity: 0.85,
+    backgroundColor: colors.brand.redGlow,
   },
   detailsButtonText: {
     ...typography.bodySmall,
-    color: colors.text.inverse,
+    color: colors.brand.redDeep,
     fontWeight: '700',
     letterSpacing: 0.6,
   },

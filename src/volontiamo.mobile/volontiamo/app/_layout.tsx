@@ -3,11 +3,12 @@ import { useRouter } from 'expo-router';
 import { DrawerContentComponentProps, DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { NotificationsProvider, useNotifications } from '../lib/notifications';
 import { formatUserType } from '../lib/types';
 import { colors, typography } from '../theme';
+import { AppText } from '../components/AppText';
 
 export default function RootLayout() {
   return (
@@ -35,7 +36,7 @@ function AppDrawer() {
           drawerActiveTintColor: colors.brand.red,
           drawerInactiveTintColor: colors.text.soft,
           drawerLabelStyle: {
-            fontSize: 15,
+            fontSize: 16,
             fontWeight: '600',
           },
           headerStyle: {
@@ -47,7 +48,7 @@ function AppDrawer() {
           },
           headerTintColor: colors.text.strong,
           headerTitleStyle: {
-            fontSize: 17,
+            fontSize: 18,
             fontWeight: '700',
             color: colors.text.strong,
           },
@@ -69,10 +70,10 @@ function AppDrawer() {
           options={{
             drawerLabel: ({ color }) => (
               <View style={styles.drawerLabelRow}>
-                <Text style={[styles.drawerLabelText, { color }]}>Notifiche</Text>
+                <AppText style={[styles.drawerLabelText, { color }]}>Notifiche</AppText>
                 {unreadCount > 0 ? (
                   <View style={styles.drawerBadge}>
-                    <Text style={styles.drawerBadgeText}>{unreadCount > 99 ? '99+' : String(unreadCount)}</Text>
+                    <AppText style={styles.drawerBadgeText}>{unreadCount > 99 ? '99+' : String(unreadCount)}</AppText>
                   </View>
                 ) : null}
               </View>
@@ -112,17 +113,17 @@ function SessionDrawerContent(props: DrawerContentComponentProps) {
     <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerContent}>
       {status === 'authenticated' && user ? (
         <View style={styles.drawerIdentity}>
-          <Text style={styles.drawerName} numberOfLines={1}>
+          <AppText style={styles.drawerName}>
             {user.firstName} {user.lastName}
-          </Text>
-          <Text style={styles.drawerEmail} numberOfLines={1}>{user.email}</Text>
-          <Text style={styles.drawerType}>{formatUserType(user.userType)}</Text>
+          </AppText>
+          <AppText style={styles.drawerEmail}>{user.email}</AppText>
+          <AppText style={styles.drawerType}>{formatUserType(user.userType)}</AppText>
         </View>
       ) : null}
       <DrawerItemList {...props} />
       {status === 'authenticated' ? (
         <Pressable style={styles.drawerSignOut} onPress={handleSignOut}>
-          <Text style={styles.drawerSignOutText}>Esci</Text>
+          <AppText style={styles.drawerSignOutText}>Esci</AppText>
         </Pressable>
       ) : null}
     </DrawerContentScrollView>
@@ -180,7 +181,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   drawerLabelText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
   },
   drawerBadge: {
