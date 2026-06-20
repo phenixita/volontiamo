@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { EventStatus } from "@/lib/events/contracts";
-import { createEvent, deleteEvent, removeParticipant, updateEvent } from "@/lib/events/http-events-adapter";
+import { acceptCandidate, createEvent, deleteEvent, rejectCandidate, updateEvent } from "@/lib/events/http-events-adapter";
 
 const ROME_TIME_ZONE = "Europe/Rome";
 
@@ -144,12 +144,24 @@ export async function updateEventAction(id: number, formData: FormData) {
   redirect(`/events/${id}`);
 }
 
-export async function removeParticipantAction(eventId: number, userId: string) {
-  const result = await removeParticipant(eventId, userId);
+export async function acceptCandidateAction(eventId: number, userId: string) {
+  const result = await acceptCandidate(eventId, userId);
   if (!result.ok) {
     redirect(`/events/${eventId}?error=${encodeURIComponent(result.message)}`);
   }
 
   revalidatePath(`/events/${eventId}`);
+  revalidatePath("/events");
+  redirect(`/events/${eventId}`);
+}
+
+export async function rejectCandidateAction(eventId: number, userId: string) {
+  const result = await rejectCandidate(eventId, userId);
+  if (!result.ok) {
+    redirect(`/events/${eventId}?error=${encodeURIComponent(result.message)}`);
+  }
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/events");
   redirect(`/events/${eventId}`);
 }

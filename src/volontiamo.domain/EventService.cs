@@ -32,7 +32,8 @@ public record EventResponse(
     EventStatus Status,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    int AcceptedParticipantsCount);
+    int CandidataParticipantsCount,
+    int PartecipaParticipantsCount);
 
 public record EventVolunteerResponse(
     Guid UserId,
@@ -51,13 +52,15 @@ public record EventDetailResponse(
     EventStatus Status,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    int AcceptedParticipantsCount,
-    IReadOnlyList<EventVolunteerResponse> AcceptedParticipants);
+    IReadOnlyList<EventVolunteerResponse> CandidataParticipants,
+    IReadOnlyList<EventVolunteerResponse> PartecipaParticipants,
+    IReadOnlyList<EventVolunteerResponse> NonInteressataParticipants,
+    IReadOnlyList<EventVolunteerResponse> RifiutataParticipants);
 
 public enum ParticipantEventListMode
 {
     Available = 0,
-    Refused = 1
+    NonInteressata = 1
 }
 
 public record ParticipantEventListRequest(
@@ -74,8 +77,6 @@ public record ParticipantEventResponse(
     string? Location,
     string OperationalNotesMarkdown,
     EventParticipationStatus? ParticipationStatus);
-
-public record SetEventParticipationRequest(Guid UserId, EventParticipationStatus Status);
 
 public sealed class EventService
 {
@@ -111,7 +112,7 @@ public sealed class EventService
         await _repository.AddAsync(eventItem, ct);
         await _repository.SaveChangesAsync(ct);
 
-        return Result<EventResponse>.Success(MapToResponse(eventItem, 0));
+        return Result<EventResponse>.Success(MapToResponse(eventItem, 0, 0));
     }
 
     public async Task<Result<bool>> UpdateAsync(int id, UpdateEventRequest request, CancellationToken ct = default)
@@ -152,7 +153,9 @@ public sealed class EventService
             statuses);
 
         var result = await _repository.ListAsync(filter, page, pageSize, ct);
-        var items = result.Items.Select(item => MapToResponse(item.Event, item.AcceptedParticipantsCount)).ToList();
+        var items = result.Items
+            .Select(item => MapToResponse(item.Event, item.CandidataParticipantsCount, item.PartecipaParticipantsCount))
+            .ToList();
         return new PagedResponse<EventResponse>(items, page, pageSize, result.TotalCount);
     }
 
@@ -193,46 +196,66 @@ public sealed class EventService
         return new PagedResponse<ParticipantEventResponse>(items, page, pageSize, result.TotalCount);
     }
 
-    public async Task<Result<ParticipantEventResponse>> SetParticipationAsync(int eventId, SetEventParticipationRequest request, CancellationToken ct = default)
+    public async Task<Result<ParticipantEventResponse>> ApplyAsync(int eventId, Guid userId, CancellationToken ct = default)
     {
-        var eventItem = await _repository.GetByIdAsync(eventId, ct);
-        if (eventItem is null)
-            return Result<ParticipantEventResponse>.NotFound();
-
-        var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
-        if (!IsSelectable(eventItem, nowUtc))
-            return Result<ParticipantEventResponse>.Conflict("Event is not selectable.");
-
-        var participation = await _repository.GetParticipationAsync(eventId, request.UserId, ct);
-        if (participation is null)
-        {
-            participation = EventParticipation.Create(eventId, request.UserId, request.Status, nowUtc);
-            await _repository.AddParticipationAsync(participation, ct);
-        }
-        else
-        {
-            participation.ChangeStatus(request.Status, nowUtc);
-        }
-
-        await _repository.SaveChangesAsync(ct);
-
-        return Result<ParticipantEventResponse>.Success(MapToParticipantResponse(eventItem, participation.Status));
-    }
-
-    public async Task<Result<bool>> RemoveParticipantAsync(int eventId, Guid userId, CancellationToken ct = default)
-    {
-        var eventItem = await _repository.GetByIdAsync(eventId, ct);
-        if (eventItem is null || eventItem.IsDeleted)
-            return Result<bool>.NotFound();
+        var resolution = await GetSelectableEventAsync<ParticipantEventResponse>(eventId, ct);
+        if (resolution.Error is not null)
+            return resolution.Error;
 
         var participation = await _repository.GetParticipationAsync(eventId, userId, ct);
-        if (participation is null || participation.Status != EventParticipationStatus.Accepted)
-            return Result<bool>.NotFound();
+        if (participation is not null)
+            return Result<ParticipantEventResponse>.Conflict(GetApplyConflictMessage(participation.Status));
 
-        participation.ChangeStatus(EventParticipationStatus.Refused, _timeProvider.GetUtcNow().UtcDateTime);
+        var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
+        participation = EventParticipation.Create(eventId, userId, EventParticipationStatus.Candidata, nowUtc);
+        await _repository.AddParticipationAsync(participation, ct);
         await _repository.SaveChangesAsync(ct);
 
-        return Result<bool>.Success(true);
+        return Result<ParticipantEventResponse>.Success(MapToParticipantResponse(resolution.Event!, participation.Status));
+    }
+
+    public async Task<Result<ParticipantEventResponse>> MarkAsNotInterestedAsync(int eventId, Guid userId, CancellationToken ct = default)
+    {
+        var resolution = await GetSelectableEventAsync<ParticipantEventResponse>(eventId, ct);
+        if (resolution.Error is not null)
+            return resolution.Error;
+
+        var participation = await _repository.GetParticipationAsync(eventId, userId, ct);
+        if (participation is not null)
+            return Result<ParticipantEventResponse>.Conflict(GetNotInterestedConflictMessage(participation.Status));
+
+        var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
+        participation = EventParticipation.Create(eventId, userId, EventParticipationStatus.NonInteressata, nowUtc);
+        await _repository.AddParticipationAsync(participation, ct);
+        await _repository.SaveChangesAsync(ct);
+
+        return Result<ParticipantEventResponse>.Success(MapToParticipantResponse(resolution.Event!, participation.Status));
+    }
+
+    public async Task<Result<ParticipantEventResponse>> RestoreAvailabilityAsync(int eventId, Guid userId, CancellationToken ct = default)
+    {
+        var resolution = await GetSelectableEventAsync<ParticipantEventResponse>(eventId, ct);
+        if (resolution.Error is not null)
+            return resolution.Error;
+
+        var participation = await _repository.GetParticipationAsync(eventId, userId, ct);
+        if (participation is null || participation.Status != EventParticipationStatus.NonInteressata)
+            return Result<ParticipantEventResponse>.Conflict("Only volunteers marked as NonInteressata can be restored.");
+
+        await _repository.RemoveParticipationAsync(participation, ct);
+        await _repository.SaveChangesAsync(ct);
+
+        return Result<ParticipantEventResponse>.Success(MapToParticipantResponse(resolution.Event!, null));
+    }
+
+    public async Task<Result<bool>> AcceptCandidateAsync(int eventId, Guid userId, CancellationToken ct = default)
+    {
+        return await FinalizeCandidateAsync(eventId, userId, EventParticipationStatus.Partecipa, ct);
+    }
+
+    public async Task<Result<bool>> RejectCandidateAsync(int eventId, Guid userId, CancellationToken ct = default)
+    {
+        return await FinalizeCandidateAsync(eventId, userId, EventParticipationStatus.Rifiutata, ct);
     }
 
     private static List<ValidationError> ValidateEvent(string name, DateTime startAtUtc, DateTime endAtUtc)
@@ -249,7 +272,63 @@ public sealed class EventService
         return errors;
     }
 
-    private static EventResponse MapToResponse(Event eventItem, int acceptedParticipantsCount)
+    private async Task<Result<bool>> FinalizeCandidateAsync(
+        int eventId,
+        Guid userId,
+        EventParticipationStatus finalStatus,
+        CancellationToken ct)
+    {
+        var resolution = await GetSelectableEventAsync<bool>(eventId, ct);
+        if (resolution.Error is not null)
+            return resolution.Error;
+
+        var participation = await _repository.GetParticipationAsync(eventId, userId, ct);
+        if (participation is null || participation.Status != EventParticipationStatus.Candidata)
+            return Result<bool>.Conflict("Only candidacies can transition to a final event participation state.");
+
+        participation.ChangeStatus(finalStatus, _timeProvider.GetUtcNow().UtcDateTime);
+        await _repository.SaveChangesAsync(ct);
+
+        return Result<bool>.Success(true);
+    }
+
+    private async Task<SelectableEventResolution<TResult>> GetSelectableEventAsync<TResult>(int eventId, CancellationToken ct)
+    {
+        var eventItem = await _repository.GetByIdAsync(eventId, ct);
+        if (eventItem is null || eventItem.IsDeleted)
+            return SelectableEventResolution<TResult>.NotFound();
+
+        if (!IsSelectable(eventItem, _timeProvider.GetUtcNow().UtcDateTime))
+            return SelectableEventResolution<TResult>.Conflict("Event is not selectable.");
+
+        return SelectableEventResolution<TResult>.Success(eventItem);
+    }
+
+    private static string GetApplyConflictMessage(EventParticipationStatus status)
+    {
+        return status switch
+        {
+            EventParticipationStatus.Candidata => "Volunteer is already a candidate for this event.",
+            EventParticipationStatus.Partecipa => "Volunteer participation is already final.",
+            EventParticipationStatus.Rifiutata => "Volunteer participation was already rejected.",
+            EventParticipationStatus.NonInteressata => "Availability must be restored before applying to this event.",
+            _ => "Event participation cannot transition to Candidata."
+        };
+    }
+
+    private static string GetNotInterestedConflictMessage(EventParticipationStatus status)
+    {
+        return status switch
+        {
+            EventParticipationStatus.Candidata => "Candidate volunteers cannot be marked as NonInteressata.",
+            EventParticipationStatus.Partecipa => "Confirmed participants cannot be marked as NonInteressata.",
+            EventParticipationStatus.Rifiutata => "Rejected participations are final for this event.",
+            EventParticipationStatus.NonInteressata => "Volunteer is already marked as NonInteressata for this event.",
+            _ => "Event participation cannot transition to NonInteressata."
+        };
+    }
+
+    private static EventResponse MapToResponse(Event eventItem, int candidataParticipantsCount, int partecipaParticipantsCount)
     {
         return new EventResponse(
             eventItem.Id,
@@ -261,14 +340,16 @@ public sealed class EventService
             eventItem.Status,
             eventItem.CreatedAt,
             eventItem.UpdatedAt,
-            acceptedParticipantsCount);
+            candidataParticipantsCount,
+            partecipaParticipantsCount);
     }
 
     private static EventDetailResponse MapToDetailResponse(EventDetailItem detail)
     {
-        var acceptedParticipants = detail.AcceptedParticipants
-            .Select(MapToVolunteerResponse)
-            .ToList();
+        var candidataParticipants = MapParticipants(detail.Participants, EventParticipationStatus.Candidata);
+        var partecipaParticipants = MapParticipants(detail.Participants, EventParticipationStatus.Partecipa);
+        var nonInteressataParticipants = MapParticipants(detail.Participants, EventParticipationStatus.NonInteressata);
+        var rifiutataParticipants = MapParticipants(detail.Participants, EventParticipationStatus.Rifiutata);
 
         return new EventDetailResponse(
             detail.Event.Id,
@@ -280,11 +361,23 @@ public sealed class EventService
             detail.Event.Status,
             detail.Event.CreatedAt,
             detail.Event.UpdatedAt,
-            acceptedParticipants.Count,
-            acceptedParticipants);
+            candidataParticipants,
+            partecipaParticipants,
+            nonInteressataParticipants,
+            rifiutataParticipants);
     }
 
-    private static EventVolunteerResponse MapToVolunteerResponse(EventAcceptedParticipant participant)
+    private static IReadOnlyList<EventVolunteerResponse> MapParticipants(
+        IReadOnlyList<EventParticipant> participants,
+        EventParticipationStatus status)
+    {
+        return participants
+            .Where(participant => participant.ParticipationStatus == status)
+            .Select(MapToVolunteerResponse)
+            .ToList();
+    }
+
+    private static EventVolunteerResponse MapToVolunteerResponse(EventParticipant participant)
     {
         return new EventVolunteerResponse(
             participant.UserId,
@@ -316,5 +409,12 @@ public sealed class EventService
             eventItem.Location,
             eventItem.OperationalNotesMarkdown,
             participationStatus);
+    }
+
+    private sealed record SelectableEventResolution<TResult>(Event? Event, Result<TResult>? Error)
+    {
+        public static SelectableEventResolution<TResult> Success(Event eventItem) => new(eventItem, null);
+        public static SelectableEventResolution<TResult> NotFound() => new(null, Result<TResult>.NotFound());
+        public static SelectableEventResolution<TResult> Conflict(string message) => new(null, Result<TResult>.Conflict(message));
     }
 }

@@ -9,8 +9,10 @@ public enum EventStatus
 
 public enum EventParticipationStatus
 {
-    Accepted = 0,
-    Refused = 1
+    Candidata = 0,
+    Partecipa = 1,
+    Rifiutata = 2,
+    NonInteressata = 3
 }
 
 public class Event

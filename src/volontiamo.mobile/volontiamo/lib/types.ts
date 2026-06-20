@@ -1,8 +1,8 @@
 export type EventStatus = 'Draft' | 'Active' | 'Concluded';
 
-export type ParticipationStatus = 'Accepted' | 'Refused';
+export type ParticipationStatus = 'Candidata' | 'Partecipa' | 'Rifiutata' | 'NonInteressata';
 
-export type ParticipantEventListView = 'available' | 'refused';
+export type ParticipantEventListView = 'available' | 'non-interessata';
 
 export type UserType = 0 | 1;
 

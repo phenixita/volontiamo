@@ -10,23 +10,42 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../../../lib/auth';
-import { fetchMyEvents, setEventParticipation } from '../../../lib/api';
+import { applyForEvent, fetchMyEvents, markEventNotInterested, restoreEventAvailability } from '../../../lib/api';
 import { ParticipantEventListView, ParticipantEventResponse, ParticipationStatus } from '../../../lib/types';
 import { formatEventDate, formatEventTime } from '../../../lib/datetime';
 import { colors, typography } from '../../../theme';
 
 const PAGE_SIZE = 15;
 
+type EventAction = 'candidata' | 'non-interessata' | 'restore';
+
 type EventCardProps = {
   event: ParticipantEventResponse;
+  view: ParticipantEventListView;
   isUpdating: boolean;
-  onSetParticipation: (eventId: number, status: ParticipationStatus) => void;
+  onRunAction: (eventId: number, action: EventAction) => void;
   onShowDetails: (event: ParticipantEventResponse) => void;
 };
 
-function EventCard({ event, isUpdating, onSetParticipation, onShowDetails }: EventCardProps) {
-  const acceptedSelected = event.participationStatus === 'Accepted';
-  const refusedSelected = event.participationStatus === 'Refused';
+function statusBadgeLabel(status: ParticipationStatus): string {
+  switch (status) {
+    case 'Candidata':
+      return 'Candidata';
+    case 'Partecipa':
+      return 'Partecipa';
+    case 'Rifiutata':
+      return 'Rifiutata';
+    case 'NonInteressata':
+      return 'Non interessata';
+  }
+}
+
+function EventCard({ event, view, isUpdating, onRunAction, onShowDetails }: EventCardProps) {
+  const participationStatus = event.participationStatus;
+  const canApply = participationStatus === null;
+  const canMarkNotInterested = participationStatus === null;
+  const canRestore = participationStatus === 'NonInteressata';
+  const showStatusBadge = participationStatus === 'Candidata' || participationStatus === 'Partecipa' || participationStatus === 'Rifiutata';
 
   return (
     <View style={styles.card}>
@@ -54,44 +73,72 @@ function EventCard({ event, isUpdating, onSetParticipation, onShowDetails }: Eve
         )}
       </View>
 
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          disabled={isUpdating || refusedSelected}
-          onPress={() => onSetParticipation(event.id, 'Refused')}
-          style={({ pressed }) => [
-            styles.actionButton,
-            refusedSelected && styles.refuseButtonSelected,
-            (isUpdating || refusedSelected) && styles.actionButtonDisabled,
-            pressed && !refusedSelected && styles.actionButtonPressed,
-          ]}
-        >
-          {isUpdating ? (
-            <ActivityIndicator size="small" color={colors.brand.red} />
-          ) : (
-            <Text style={[styles.actionText, refusedSelected && styles.refuseTextSelected]}>
-              Rifiuto
+      {view === 'non-interessata' ? (
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isUpdating || !canRestore}
+            onPress={() => onRunAction(event.id, 'restore')}
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.acceptButton,
+              (isUpdating || !canRestore) && styles.actionButtonDisabled,
+              pressed && canRestore && styles.actionButtonPressed,
+            ]}
+          >
+            {isUpdating ? (
+              <ActivityIndicator size="small" color={colors.positive.greenDeep} />
+            ) : (
+              <Text style={[styles.actionText, styles.acceptText]}>Torna disponibile</Text>
+            )}
+          </Pressable>
+        </View>
+      ) : showStatusBadge ? (
+        <View style={styles.statusRow}>
+          <View style={[styles.statusBadge, participationStatus === 'Candidata' ? styles.statusBadgeCandidate : styles.statusBadgeFinal]}>
+            <Text style={[styles.statusBadgeText, participationStatus === 'Candidata' ? styles.statusBadgeCandidateText : styles.statusBadgeFinalText]}>
+              {statusBadgeLabel(participationStatus!)}
             </Text>
-          )}
-        </Pressable>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isUpdating || !canMarkNotInterested}
+            onPress={() => onRunAction(event.id, 'non-interessata')}
+            style={({ pressed }) => [
+              styles.actionButton,
+              (isUpdating || !canMarkNotInterested) && styles.actionButtonDisabled,
+              pressed && canMarkNotInterested && styles.actionButtonPressed,
+            ]}
+          >
+            {isUpdating ? (
+              <ActivityIndicator size="small" color={colors.brand.red} />
+            ) : (
+              <Text style={styles.actionText}>Non interessata</Text>
+            )}
+          </Pressable>
 
-        <Pressable
-          accessibilityRole="button"
-          disabled={isUpdating || acceptedSelected}
-          onPress={() => onSetParticipation(event.id, 'Accepted')}
-          style={({ pressed }) => [
-            styles.actionButton,
-            styles.acceptButton,
-            acceptedSelected && styles.acceptButtonSelected,
-            (isUpdating || acceptedSelected) && styles.actionButtonDisabled,
-            pressed && !acceptedSelected && styles.actionButtonPressed,
-          ]}
-        >
-          <Text style={[styles.actionText, styles.acceptText, acceptedSelected && styles.acceptTextSelected]}>
-            Partecipo
-          </Text>
-        </Pressable>
-      </View>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isUpdating || !canApply}
+            onPress={() => onRunAction(event.id, 'candidata')}
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.acceptButton,
+              (isUpdating || !canApply) && styles.actionButtonDisabled,
+              pressed && canApply && styles.actionButtonPressed,
+            ]}
+          >
+            {isUpdating ? (
+              <ActivityIndicator size="small" color={colors.positive.greenDeep} />
+            ) : (
+              <Text style={[styles.actionText, styles.acceptText]}>Candidati</Text>
+            )}
+          </Pressable>
+        </View>
+      )}
 
       <Pressable
         accessibilityRole="button"
@@ -158,9 +205,14 @@ export default function EventsScreen() {
     setError(null);
   }, [view]);
 
-  const handleSetParticipation = useCallback(async (eventId: number, nextStatus: ParticipationStatus) => {
+  const handleRunAction = useCallback(async (eventId: number, action: EventAction) => {
     setUpdatingIds(prev => new Set(prev).add(eventId));
-    const result = await setEventParticipation(eventId, nextStatus);
+    const result = action === 'candidata'
+      ? await applyForEvent(eventId)
+      : action === 'non-interessata'
+        ? await markEventNotInterested(eventId)
+        : await restoreEventAvailability(eventId);
+
     setUpdatingIds(prev => {
       const next = new Set(prev);
       next.delete(eventId);
@@ -172,8 +224,8 @@ export default function EventsScreen() {
       return;
     }
 
-    const shouldRemove = (view === 'available' && nextStatus === 'Refused')
-      || (view === 'refused' && nextStatus === 'Accepted');
+    const shouldRemove = (view === 'available' && action === 'non-interessata')
+      || (view === 'non-interessata' && action === 'restore');
 
     if (shouldRemove) {
       setEvents(prev => prev.filter(event => event.id !== eventId));
@@ -195,18 +247,18 @@ export default function EventsScreen() {
     <View style={styles.header}>
       <Pressable
         accessibilityRole="switch"
-        accessibilityState={{ checked: view === 'refused' }}
-        onPress={() => handleViewChange(view === 'refused' ? 'available' : 'refused')}
+        accessibilityState={{ checked: view === 'non-interessata' }}
+        onPress={() => handleViewChange(view === 'non-interessata' ? 'available' : 'non-interessata')}
         style={({ pressed }) => [
           styles.filterToggle,
-          view === 'refused' && styles.filterToggleSelected,
+          view === 'non-interessata' && styles.filterToggleSelected,
           pressed && styles.filterTogglePressed,
         ]}
       >
-        <View style={[styles.checkbox, view === 'refused' && styles.checkboxSelected]}>
-          {view === 'refused' && <Text style={styles.checkboxMark}>✓</Text>}
+        <View style={[styles.checkbox, view === 'non-interessata' && styles.checkboxSelected]}>
+          {view === 'non-interessata' && <Text style={styles.checkboxMark}>✓</Text>}
         </View>
-        <Text style={styles.filterText}>Mostra rifiutati</Text>
+        <Text style={styles.filterText}>Mostra non interessata</Text>
       </Pressable>
     </View>
   ), [handleViewChange, view]);
@@ -250,8 +302,9 @@ export default function EventsScreen() {
       renderItem={({ item }) => (
         <EventCard
           event={item}
+          view={view}
           isUpdating={updatingIds.has(item.id)}
-          onSetParticipation={handleSetParticipation}
+          onRunAction={handleRunAction}
           onShowDetails={handleShowDetails}
         />
       )}
@@ -262,8 +315,8 @@ export default function EventsScreen() {
           <Text style={styles.emptyEmoji}>📋</Text>
           <Text style={styles.emptyTitle}>Nessun evento</Text>
           <Text style={styles.emptyMessage}>
-            {view === 'refused'
-              ? 'Non ci sono eventi rifiutati al momento.'
+            {view === 'non-interessata'
+              ? 'Non hai eventi esclusi da recuperare al momento.'
               : 'Non ci sono eventi disponibili al momento.'}
           </Text>
         </View>
@@ -343,6 +396,31 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.text.strong,
   },
+  statusRow: {
+    marginTop: 16,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  statusBadgeCandidate: {
+    backgroundColor: colors.brand.redSoft,
+  },
+  statusBadgeFinal: {
+    backgroundColor: colors.background.subtle,
+  },
+  statusBadgeText: {
+    ...typography.bodySmall,
+    fontWeight: '700',
+  },
+  statusBadgeCandidateText: {
+    color: colors.brand.redDeep,
+  },
+  statusBadgeFinalText: {
+    color: colors.text.soft,
+  },
   separator: {
     height: 12,
   },
@@ -411,10 +489,6 @@ const styles = StyleSheet.create({
     borderColor: colors.positive.greenDeep,
     backgroundColor: colors.positive.green,
   },
-  refuseButtonSelected: {
-    borderColor: colors.brand.red,
-    backgroundColor: colors.brand.redSoft,
-  },
   actionButtonDisabled: {
     opacity: 0.72,
   },
@@ -434,9 +508,6 @@ const styles = StyleSheet.create({
   },
   acceptTextSelected: {
     color: colors.text.inverse,
-  },
-  refuseTextSelected: {
-    color: colors.brand.red,
   },
   detailsButton: {
     marginTop: 10,

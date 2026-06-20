@@ -17,7 +17,8 @@ export interface EventDto {
   status: EventStatus;
   createdAt: string;
   updatedAt: string;
-  acceptedParticipantsCount: number;
+  candidataParticipantsCount: number;
+  partecipaParticipantsCount: number;
 }
 
 export interface EventVolunteerDto {
@@ -38,8 +39,10 @@ export interface EventDetailDto {
   status: EventStatus;
   createdAt: string;
   updatedAt: string;
-  acceptedParticipantsCount: number;
-  acceptedParticipants: EventVolunteerDto[];
+  candidataParticipants: EventVolunteerDto[];
+  partecipaParticipants: EventVolunteerDto[];
+  nonInteressataParticipants: EventVolunteerDto[];
+  rifiutataParticipants: EventVolunteerDto[];
 }
 
 export interface ReadEventsInput {

@@ -29,8 +29,10 @@ function parseEvent(raw: string | string[] | undefined): ParticipantEventRespons
 }
 
 function participationLabel(status: ParticipationStatus | null): string {
-  if (status === 'Accepted') return 'Partecipi a questo evento';
-  if (status === 'Refused') return 'Hai rifiutato questo evento';
+  if (status === 'Candidata') return 'Hai inviato la tua candidatura';
+  if (status === 'Partecipa') return 'Partecipi a questo evento';
+  if (status === 'Rifiutata') return 'La tua candidatura e stata rifiutata';
+  if (status === 'NonInteressata') return 'Hai escluso questo evento';
   return 'Nessuna risposta';
 }
 

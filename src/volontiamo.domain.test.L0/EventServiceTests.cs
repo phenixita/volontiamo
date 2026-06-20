@@ -105,7 +105,7 @@ public class EventServiceTests
         var eventItem = CreateEvent("Screening", EventStatus.Active);
         var repository = new FakeEventRepository
         {
-            ListHandler = (_, _, _) => new PagedResult<EventListItem>([new EventListItem(eventItem, 2)], 1)
+            ListHandler = (_, _, _) => new PagedResult<EventListItem>([new EventListItem(eventItem, 2, 1)], 1)
         };
         var service = new EventService(repository);
 
@@ -117,7 +117,8 @@ public class EventServiceTests
         Assert.Equal(100, result.PageSize);
         Assert.Single(result.Items);
         Assert.Equal("Screening", result.Items[0].Name);
-        Assert.Equal(2, result.Items[0].AcceptedParticipantsCount);
+        Assert.Equal(2, result.Items[0].CandidataParticipantsCount);
+        Assert.Equal(1, result.Items[0].PartecipaParticipantsCount);
     }
 
     [Fact]
@@ -132,13 +133,15 @@ public class EventServiceTests
     }
 
     [Fact]
-    public async Task GetDetailAsync_WhenEventExists_MapsAcceptedParticipants()
+    public async Task GetDetailAsync_WhenEventExists_MapsParticipantsByStatus()
     {
         var eventItem = CreateEvent(id: 77, name: "Dettaglio", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
-        var participants = new List<EventAcceptedParticipant>
+        var participants = new List<EventParticipant>
         {
-            new(Guid.NewGuid(), "Mario", "Rossi", "mario.rossi@example.com", "+391111111111"),
-            new(Guid.NewGuid(), "Anna", "Bianchi", "anna.bianchi@example.com", null)
+            new(Guid.NewGuid(), "Mario", "Rossi", "mario.rossi@example.com", "+391111111111", EventParticipationStatus.Candidata),
+            new(Guid.NewGuid(), "Luca", "Verdi", "luca.verdi@example.com", "+392222222222", EventParticipationStatus.Partecipa),
+            new(Guid.NewGuid(), "Anna", "Bianchi", "anna.bianchi@example.com", null, EventParticipationStatus.NonInteressata),
+            new(Guid.NewGuid(), "Paola", "Neri", "paola.neri@example.com", null, EventParticipationStatus.Rifiutata)
         };
 
         var repository = new FakeEventRepository
@@ -152,10 +155,14 @@ public class EventServiceTests
         Assert.Equal(ResultStatus.Ok, result.Status);
         Assert.NotNull(result.Value);
         Assert.Equal(eventItem.Id, result.Value!.Id);
-        Assert.Equal(2, result.Value.AcceptedParticipantsCount);
-        Assert.Equal(2, result.Value.AcceptedParticipants.Count);
-        Assert.Equal("Mario", result.Value.AcceptedParticipants[0].FirstName);
-        Assert.Equal("anna.bianchi@example.com", result.Value.AcceptedParticipants[1].Email);
+        var candidata = Assert.Single(result.Value.CandidataParticipants);
+        var partecipa = Assert.Single(result.Value.PartecipaParticipants);
+        var nonInteressata = Assert.Single(result.Value.NonInteressataParticipants);
+        var rifiutata = Assert.Single(result.Value.RifiutataParticipants);
+        Assert.Equal("Mario", candidata.FirstName);
+        Assert.Equal("luca.verdi@example.com", partecipa.Email);
+        Assert.Equal("Anna", nonInteressata.FirstName);
+        Assert.Equal("Paola", rifiutata.FirstName);
     }
 
     [Fact]
@@ -185,53 +192,59 @@ public class EventServiceTests
     }
 
     [Fact]
-    public async Task ListParticipantEventsAsync_AvailableIncludesActiveFutureUnselectedAndAcceptedEvents()
+    public async Task ListParticipantEventsAsync_AvailableIncludesActiveFutureEventsExceptNonInteressata()
     {
         var userId = Guid.NewGuid();
         var unselected = CreateEvent(id: 1, name: "Unselected", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
-        var accepted = CreateEvent(id: 2, name: "Accepted", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(2));
-        var refused = CreateEvent(id: 3, name: "Refused", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(3));
+        var candidata = CreateEvent(id: 2, name: "Candidata", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(2));
+        var partecipa = CreateEvent(id: 3, name: "Partecipa", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(3));
+        var rifiutata = CreateEvent(id: 4, name: "Rifiutata", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(4));
+        var nonInteressata = CreateEvent(id: 5, name: "NonInteressata", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(5));
         var repository = new FakeEventRepository
         {
-            Events = [unselected, accepted, refused],
+            Events = [unselected, candidata, partecipa, rifiutata, nonInteressata],
             Participations =
             [
-                EventParticipation.Create(accepted.Id, userId, EventParticipationStatus.Accepted, FixedNowUtc),
-                EventParticipation.Create(refused.Id, userId, EventParticipationStatus.Refused, FixedNowUtc)
+                EventParticipation.Create(candidata.Id, userId, EventParticipationStatus.Candidata, FixedNowUtc),
+                EventParticipation.Create(partecipa.Id, userId, EventParticipationStatus.Partecipa, FixedNowUtc),
+                EventParticipation.Create(rifiutata.Id, userId, EventParticipationStatus.Rifiutata, FixedNowUtc),
+                EventParticipation.Create(nonInteressata.Id, userId, EventParticipationStatus.NonInteressata, FixedNowUtc)
             ]
         };
         var service = CreateService(repository);
 
         var result = await service.ListParticipantEventsAsync(new ParticipantEventListRequest(userId, ParticipantEventListMode.Available, 1, 10));
 
-        Assert.Equal(2, result.TotalCount);
-        Assert.Equal(["Unselected", "Accepted"], result.Items.Select(e => e.Name).ToArray());
+        Assert.Equal(4, result.TotalCount);
+        Assert.Equal(["Unselected", "Candidata", "Partecipa", "Rifiutata"], result.Items.Select(e => e.Name).ToArray());
         Assert.Null(result.Items[0].ParticipationStatus);
-        Assert.Equal(EventParticipationStatus.Accepted, result.Items[1].ParticipationStatus);
+        Assert.Equal(EventParticipationStatus.Candidata, result.Items[1].ParticipationStatus);
+        Assert.Equal(EventParticipationStatus.Partecipa, result.Items[2].ParticipationStatus);
+        Assert.Equal(EventParticipationStatus.Rifiutata, result.Items[3].ParticipationStatus);
     }
 
     [Fact]
-    public async Task ListParticipantEventsAsync_RefusedReturnsOnlyRefusedActiveFutureEvents()
+    public async Task ListParticipantEventsAsync_NonInteressataReturnsOnlyNonInteressataActiveFutureEvents()
     {
         var userId = Guid.NewGuid();
-        var refused = CreateEvent(id: 1, name: "Refused", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
-        var accepted = CreateEvent(id: 2, name: "Accepted", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(2));
+        var nonInteressata = CreateEvent(id: 1, name: "NonInteressata", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
+        var candidata = CreateEvent(id: 2, name: "Candidata", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(2));
         var repository = new FakeEventRepository
         {
-            Events = [refused, accepted],
+            Events = [nonInteressata, candidata],
             Participations =
             [
-                EventParticipation.Create(refused.Id, userId, EventParticipationStatus.Refused, FixedNowUtc),
-                EventParticipation.Create(accepted.Id, userId, EventParticipationStatus.Accepted, FixedNowUtc)
+                EventParticipation.Create(nonInteressata.Id, userId, EventParticipationStatus.NonInteressata, FixedNowUtc),
+                EventParticipation.Create(candidata.Id, userId, EventParticipationStatus.Candidata, FixedNowUtc)
             ]
         };
         var service = CreateService(repository);
 
-        var result = await service.ListParticipantEventsAsync(new ParticipantEventListRequest(userId, ParticipantEventListMode.Refused, 1, 10));
+        var result = await service.ListParticipantEventsAsync(new ParticipantEventListRequest(userId, ParticipantEventListMode.NonInteressata, 1, 10));
 
         Assert.Single(result.Items);
-        Assert.Equal("Refused", result.Items[0].Name);
-        Assert.Equal(EventParticipationStatus.Refused, result.Items[0].ParticipationStatus);
+        Assert.Equal("NonInteressata", result.Items[0].Name);
+        Assert.Equal(EventParticipationStatus.NonInteressata, result.Items[0].ParticipationStatus);
     }
 
     [Fact]
@@ -254,73 +267,156 @@ public class EventServiceTests
     }
 
     [Fact]
-    public async Task SetParticipationAsync_WhenFirstChoice_CreatesParticipation()
+    public async Task ApplyAsync_WhenFirstChoice_CreatesCandidataParticipation()
     {
         var userId = Guid.NewGuid();
         var eventItem = CreateEvent(id: 11, name: "Selectable", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
         var repository = new FakeEventRepository { Events = [eventItem] };
         var service = CreateService(repository);
 
-        var result = await service.SetParticipationAsync(eventItem.Id, new SetEventParticipationRequest(userId, EventParticipationStatus.Accepted));
+        var result = await service.ApplyAsync(eventItem.Id, userId);
 
         Assert.Equal(ResultStatus.Ok, result.Status);
-        Assert.Equal(EventParticipationStatus.Accepted, result.Value!.ParticipationStatus);
+        Assert.Equal(EventParticipationStatus.Candidata, result.Value!.ParticipationStatus);
         var participation = Assert.Single(repository.Participations);
         Assert.Equal(eventItem.Id, participation.EventId);
         Assert.Equal(userId, participation.UserId);
-        Assert.Equal(EventParticipationStatus.Accepted, participation.Status);
+        Assert.Equal(EventParticipationStatus.Candidata, participation.Status);
         Assert.Equal(1, repository.SaveChangesCallCount);
     }
 
     [Fact]
-    public async Task SetParticipationAsync_WhenChangingChoice_UpdatesExistingParticipation()
+    public async Task MarkAsNotInterestedAsync_WhenFirstChoice_CreatesNonInteressataParticipation()
     {
         var userId = Guid.NewGuid();
         var eventItem = CreateEvent(id: 12, name: "Selectable", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
-        var participation = EventParticipation.Create(eventItem.Id, userId, EventParticipationStatus.Accepted, FixedNowUtc.AddDays(-1));
-        var repository = new FakeEventRepository { Events = [eventItem], Participations = [participation] };
-        var service = CreateService(repository);
-
-        var refused = await service.SetParticipationAsync(eventItem.Id, new SetEventParticipationRequest(userId, EventParticipationStatus.Refused));
-        var accepted = await service.SetParticipationAsync(eventItem.Id, new SetEventParticipationRequest(userId, EventParticipationStatus.Accepted));
-
-        Assert.Equal(ResultStatus.Ok, refused.Status);
-        Assert.Equal(ResultStatus.Ok, accepted.Status);
-        Assert.Single(repository.Participations);
-        Assert.Equal(EventParticipationStatus.Accepted, participation.Status);
-        Assert.Equal(2, repository.SaveChangesCallCount);
-    }
-
-    [Fact]
-    public async Task SetParticipationAsync_WhenEventIsMissing_ReturnsNotFound()
-    {
-        var repository = new FakeEventRepository();
-        var service = CreateService(repository);
-
-        var result = await service.SetParticipationAsync(404, new SetEventParticipationRequest(Guid.NewGuid(), EventParticipationStatus.Accepted));
-
-        Assert.Equal(ResultStatus.NotFound, result.Status);
-        Assert.Empty(repository.Participations);
-    }
-
-    [Theory]
-    [InlineData(EventStatus.Draft, 1, false)]
-    [InlineData(EventStatus.Concluded, 1, false)]
-    [InlineData(EventStatus.Active, -1, false)]
-    [InlineData(EventStatus.Active, 1, true)]
-    public async Task SetParticipationAsync_WhenEventIsNotSelectable_ReturnsConflict(EventStatus status, int startOffsetHours, bool deleted)
-    {
-        var eventItem = CreateEvent(id: 13, name: "Maybe selectable", status: status, startAtUtc: FixedNowUtc.AddHours(startOffsetHours));
-        if (deleted)
-            eventItem.SoftDelete();
-
         var repository = new FakeEventRepository { Events = [eventItem] };
         var service = CreateService(repository);
 
-        var result = await service.SetParticipationAsync(eventItem.Id, new SetEventParticipationRequest(Guid.NewGuid(), EventParticipationStatus.Accepted));
+        var result = await service.MarkAsNotInterestedAsync(eventItem.Id, userId);
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.Single(repository.Participations);
+        Assert.Equal(EventParticipationStatus.NonInteressata, repository.Participations[0].Status);
+        Assert.Equal(1, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task RestoreAvailabilityAsync_WhenParticipationIsNonInteressata_RemovesParticipation()
+    {
+        var userId = Guid.NewGuid();
+        var eventItem = CreateEvent(id: 13, name: "Selectable", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
+        var participation = EventParticipation.Create(eventItem.Id, userId, EventParticipationStatus.NonInteressata, FixedNowUtc.AddDays(-1));
+        var repository = new FakeEventRepository { Events = [eventItem], Participations = [participation] };
+        var service = CreateService(repository);
+
+        var result = await service.RestoreAvailabilityAsync(eventItem.Id, userId);
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.Empty(repository.Participations);
+        Assert.Null(result.Value!.ParticipationStatus);
+        Assert.Equal(1, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WhenExistingParticipationPreventsTransition_ReturnsConflict()
+    {
+        var userId = Guid.NewGuid();
+        var eventItem = CreateEvent(id: 14, name: "Selectable", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
+        var participation = EventParticipation.Create(eventItem.Id, userId, EventParticipationStatus.NonInteressata, FixedNowUtc.AddDays(-1));
+        var repository = new FakeEventRepository { Events = [eventItem], Participations = [participation] };
+        var service = CreateService(repository);
+
+        var result = await service.ApplyAsync(eventItem.Id, userId);
 
         Assert.Equal(ResultStatus.Conflict, result.Status);
+        Assert.Equal(EventParticipationStatus.NonInteressata, participation.Status);
+        Assert.Equal(0, repository.SaveChangesCallCount);
+    }
+
+    [Theory]
+    [InlineData(EventStatus.Draft, 1)]
+    [InlineData(EventStatus.Concluded, 1)]
+    [InlineData(EventStatus.Active, -1)]
+    public async Task VolunteerTransitions_WhenEventIsNotSelectable_ReturnConflict(EventStatus status, int startOffsetHours)
+    {
+        var eventItem = CreateEvent(id: 15, name: "Maybe selectable", status: status, startAtUtc: FixedNowUtc.AddHours(startOffsetHours));
+        var repository = new FakeEventRepository { Events = [eventItem] };
+        var service = CreateService(repository);
+
+        var applyResult = await service.ApplyAsync(eventItem.Id, Guid.NewGuid());
+        var notInterestedResult = await service.MarkAsNotInterestedAsync(eventItem.Id, Guid.NewGuid());
+
+        Assert.Equal(ResultStatus.Conflict, applyResult.Status);
+        Assert.Equal(ResultStatus.Conflict, notInterestedResult.Status);
         Assert.Empty(repository.Participations);
+        Assert.Equal(0, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task VolunteerTransitions_WhenEventIsDeleted_ReturnNotFound()
+    {
+        var eventItem = CreateEvent(id: 19, name: "Deleted", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
+        eventItem.SoftDelete();
+        var repository = new FakeEventRepository { Events = [eventItem] };
+        var service = CreateService(repository);
+
+        var applyResult = await service.ApplyAsync(eventItem.Id, Guid.NewGuid());
+        var notInterestedResult = await service.MarkAsNotInterestedAsync(eventItem.Id, Guid.NewGuid());
+
+        Assert.Equal(ResultStatus.NotFound, applyResult.Status);
+        Assert.Equal(ResultStatus.NotFound, notInterestedResult.Status);
+        Assert.Empty(repository.Participations);
+        Assert.Equal(0, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task AcceptCandidateAsync_WhenParticipationIsCandidata_SetsPartecipa()
+    {
+        var userId = Guid.NewGuid();
+        var eventItem = CreateEvent(id: 16, name: "Con candidatura", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
+        var participation = EventParticipation.Create(eventItem.Id, userId, EventParticipationStatus.Candidata, FixedNowUtc.AddDays(-1));
+        var repository = new FakeEventRepository { Events = [eventItem], Participations = [participation] };
+        var service = CreateService(repository);
+
+        var result = await service.AcceptCandidateAsync(eventItem.Id, userId);
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.True(result.Value);
+        Assert.Equal(EventParticipationStatus.Partecipa, participation.Status);
+        Assert.Equal(1, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task RejectCandidateAsync_WhenParticipationIsCandidata_SetsRifiutata()
+    {
+        var userId = Guid.NewGuid();
+        var eventItem = CreateEvent(id: 17, name: "Con candidatura", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
+        var participation = EventParticipation.Create(eventItem.Id, userId, EventParticipationStatus.Candidata, FixedNowUtc.AddDays(-1));
+        var repository = new FakeEventRepository { Events = [eventItem], Participations = [participation] };
+        var service = CreateService(repository);
+
+        var result = await service.RejectCandidateAsync(eventItem.Id, userId);
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.True(result.Value);
+        Assert.Equal(EventParticipationStatus.Rifiutata, participation.Status);
+        Assert.Equal(1, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task FinalizeCandidateAsync_WhenParticipationIsNotCandidata_ReturnsConflict()
+    {
+        var userId = Guid.NewGuid();
+        var eventItem = CreateEvent(id: 18, name: "Finale", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
+        var participation = EventParticipation.Create(eventItem.Id, userId, EventParticipationStatus.Partecipa, FixedNowUtc.AddDays(-1));
+        var repository = new FakeEventRepository { Events = [eventItem], Participations = [participation] };
+        var service = CreateService(repository);
+
+        var result = await service.RejectCandidateAsync(eventItem.Id, userId);
+
+        Assert.Equal(ResultStatus.Conflict, result.Status);
+        Assert.Equal(EventParticipationStatus.Partecipa, participation.Status);
         Assert.Equal(0, repository.SaveChangesCallCount);
     }
 
@@ -417,60 +513,39 @@ public class EventServiceTests
     }
 
     [Fact]
-    public async Task RemoveParticipantAsync_WhenAccepted_SetsRefusedAndPersists()
+    public async Task RestoreAvailabilityAsync_WhenParticipationIsMissing_ReturnsConflict()
     {
-        var userId = Guid.NewGuid();
-        var eventItem = CreateEvent(id: 30, name: "Con volontario", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
-        var participation = EventParticipation.Create(eventItem.Id, userId, EventParticipationStatus.Accepted, FixedNowUtc.AddDays(-1));
-        var repository = new FakeEventRepository { Events = [eventItem], Participations = [participation] };
+        var eventItem = CreateEvent(id: 30, name: "Senza volontario", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
+        var repository = new FakeEventRepository { Events = [eventItem] };
         var service = CreateService(repository);
 
-        var result = await service.RemoveParticipantAsync(eventItem.Id, userId);
+        var result = await service.RestoreAvailabilityAsync(eventItem.Id, Guid.NewGuid());
 
-        Assert.Equal(ResultStatus.Ok, result.Status);
-        Assert.True(result.Value);
-        Assert.Equal(EventParticipationStatus.Refused, participation.Status);
-        Assert.Equal(1, repository.SaveChangesCallCount);
+        Assert.Equal(ResultStatus.Conflict, result.Status);
+        Assert.Equal(0, repository.SaveChangesCallCount);
     }
 
     [Fact]
-    public async Task RemoveParticipantAsync_WhenEventIsMissing_ReturnsNotFound()
+    public async Task ApplyAsync_WhenEventIsMissing_ReturnsNotFound()
     {
         var repository = new FakeEventRepository();
         var service = CreateService(repository);
 
-        var result = await service.RemoveParticipantAsync(404, Guid.NewGuid());
+        var result = await service.ApplyAsync(404, Guid.NewGuid());
 
         Assert.Equal(ResultStatus.NotFound, result.Status);
         Assert.Equal(0, repository.SaveChangesCallCount);
     }
 
     [Fact]
-    public async Task RemoveParticipantAsync_WhenParticipationIsMissing_ReturnsNotFound()
+    public async Task AcceptCandidateAsync_WhenEventIsMissing_ReturnsNotFound()
     {
-        var eventItem = CreateEvent(id: 31, name: "Senza volontario", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
-        var repository = new FakeEventRepository { Events = [eventItem] };
+        var repository = new FakeEventRepository();
         var service = CreateService(repository);
 
-        var result = await service.RemoveParticipantAsync(eventItem.Id, Guid.NewGuid());
+        var result = await service.AcceptCandidateAsync(404, Guid.NewGuid());
 
         Assert.Equal(ResultStatus.NotFound, result.Status);
-        Assert.Equal(0, repository.SaveChangesCallCount);
-    }
-
-    [Fact]
-    public async Task RemoveParticipantAsync_WhenAlreadyRefused_ReturnsNotFound()
-    {
-        var userId = Guid.NewGuid();
-        var eventItem = CreateEvent(id: 32, name: "Gia rifiutato", status: EventStatus.Active, startAtUtc: FixedNowUtc.AddDays(1));
-        var participation = EventParticipation.Create(eventItem.Id, userId, EventParticipationStatus.Refused, FixedNowUtc.AddDays(-1));
-        var repository = new FakeEventRepository { Events = [eventItem], Participations = [participation] };
-        var service = CreateService(repository);
-
-        var result = await service.RemoveParticipantAsync(eventItem.Id, userId);
-
-        Assert.Equal(ResultStatus.NotFound, result.Status);
-        Assert.Equal(EventParticipationStatus.Refused, participation.Status);
         Assert.Equal(0, repository.SaveChangesCallCount);
     }
 
@@ -577,9 +652,9 @@ public class EventServiceTests
                     e,
                     Participations.FirstOrDefault(p => p.EventId == e.Id && p.UserId == filter.UserId)?.Status));
 
-            query = filter.Mode == ParticipantEventListMode.Refused
-                ? query.Where(item => item.ParticipationStatus == EventParticipationStatus.Refused)
-                : query.Where(item => item.ParticipationStatus is null or EventParticipationStatus.Accepted);
+            query = filter.Mode == ParticipantEventListMode.NonInteressata
+                ? query.Where(item => item.ParticipationStatus == EventParticipationStatus.NonInteressata)
+                : query.Where(item => item.ParticipationStatus != EventParticipationStatus.NonInteressata);
 
             var ordered = query
                 .OrderBy(item => item.Event.StartAtUtc)
@@ -598,6 +673,12 @@ public class EventServiceTests
         public Task AddParticipationAsync(EventParticipation participation, CancellationToken ct = default)
         {
             Participations.Add(participation);
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveParticipationAsync(EventParticipation participation, CancellationToken ct = default)
+        {
+            Participations.Remove(participation);
             return Task.CompletedTask;
         }
 

@@ -2,7 +2,7 @@ namespace volontiamo.domain;
 
 public record ReportingFilter(DateTime? FromUtc, DateTime? ToUtc);
 
-public record ReportingEventContribution(TimeSpan Duration, int AcceptedParticipantsCount);
+public record ReportingEventContribution(TimeSpan Duration, int ConfirmedParticipantsCount);
 
 public record ReportingVolunteerSnapshot(
     Guid UserId,
@@ -100,18 +100,18 @@ public sealed class ReportingService
 
     private static ReportingSummaryResponse CreateSummary(ReportingDataset dataset)
     {
-        var totalHours = dataset.EventContributions.Sum(item => RoundHours(item.Duration, item.AcceptedParticipantsCount));
+        var totalHours = dataset.EventContributions.Sum(item => RoundHours(item.Duration, item.ConfirmedParticipantsCount));
         var concludedEventsCount = dataset.EventContributions.Count;
         var volunteersCount = dataset.VolunteerTotals.Count(item => item.TotalHours > 0);
         return new ReportingSummaryResponse(totalHours, concludedEventsCount, volunteersCount);
     }
 
-    private static decimal RoundHours(TimeSpan duration, int acceptedParticipantsCount)
+    private static decimal RoundHours(TimeSpan duration, int confirmedParticipantsCount)
     {
-        if (acceptedParticipantsCount <= 0)
+        if (confirmedParticipantsCount <= 0)
             return 0m;
 
-        return (decimal)duration.TotalHours * acceptedParticipantsCount;
+        return (decimal)duration.TotalHours * confirmedParticipantsCount;
     }
 
     private static List<ReportingVolunteerSnapshot> OrderVolunteerTotals(IReadOnlyList<ReportingVolunteerSnapshot> volunteerTotals)

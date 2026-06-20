@@ -172,7 +172,8 @@ export default async function EventsPage({ searchParams }: EventsPageProps) {
                   <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Periodo</th>
                   <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Luogo</th>
                   <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Note</th>
-                  <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Volontari</th>
+                  <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Candidata</th>
+                  <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Partecipa</th>
                   <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Stato</th>
                 </tr>
               </thead>
@@ -195,7 +196,8 @@ export default async function EventsPage({ searchParams }: EventsPageProps) {
                         <ReactMarkdown>{eventItem.operationalNotesMarkdown || "_Nessuna nota operativa._"}</ReactMarkdown>
                       </div>
                     </td>
-                    <td className="px-3 py-4 text-sm font-semibold text-[var(--text-strong)]">{eventItem.acceptedParticipantsCount}</td>
+                    <td className="px-3 py-4 text-sm font-semibold text-[var(--text-strong)]">{eventItem.candidataParticipantsCount}</td>
+                    <td className="px-3 py-4 text-sm font-semibold text-[var(--text-strong)]">{eventItem.partecipaParticipantsCount}</td>
                     <td className="px-3 py-4 text-sm"><StatusPill event={eventItem} /></td>
                   </tr>
                 ))}

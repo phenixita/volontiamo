@@ -3,9 +3,9 @@ import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
 import { AppShell } from "@/app/components/app-shell";
-import { deleteEventAction, removeParticipantAction } from "@/app/events/actions";
+import { acceptCandidateAction, deleteEventAction, rejectCandidateAction } from "@/app/events/actions";
 import { requireCurrentUser } from "@/lib/auth/session";
-import type { EventDetailDto } from "@/lib/events/contracts";
+import type { EventDetailDto, EventVolunteerDto } from "@/lib/events/contracts";
 import { readEventDetail } from "@/lib/events/http-events-adapter";
 
 type EventDetailPageProps = {
@@ -105,8 +105,16 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
         </div>
 
         <div className="mt-5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-subtle)] px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Volontari accettati</p>
-          <p className="mt-2 text-2xl font-[family:var(--font-display)] text-[var(--text-strong)]">{eventDetail.acceptedParticipantsCount}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Candidata</p>
+              <p className="mt-2 text-2xl font-[family:var(--font-display)] text-[var(--text-strong)]">{eventDetail.candidataParticipants.length}</p>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Partecipa</p>
+              <p className="mt-2 text-2xl font-[family:var(--font-display)] text-[var(--text-strong)]">{eventDetail.partecipaParticipants.length}</p>
+            </div>
+          </div>
         </div>
 
         <section className="mt-6 rounded-2xl border border-[var(--border-subtle)] bg-white px-5 py-4">
@@ -116,43 +124,43 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
           </div>
         </section>
 
-        <section className="mt-6 rounded-2xl border border-[var(--border-subtle)] bg-white px-5 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Volontari confermati</p>
-          {eventDetail.acceptedParticipants.length === 0 ? (
-            <p className="mt-3 text-sm text-[var(--text-soft)]">Nessun volontario accettato per questo evento.</p>
-          ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-[720px] border-collapse">
-                <thead>
-                  <tr className="border-b border-[var(--border-subtle)] text-left">
-                    <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Nome</th>
-                    <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Cognome</th>
-                    <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Email</th>
-                    <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Telefono</th>
-                    <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Azioni</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {eventDetail.acceptedParticipants.map((participant) => (
-                    <tr key={participant.userId} className="border-b border-[var(--border-subtle)]/70 last:border-b-0">
-                      <td className="px-2 py-3 text-sm font-semibold text-[var(--text-strong)]">{participant.firstName}</td>
-                      <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.lastName}</td>
-                      <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.email}</td>
-                      <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.phone?.trim() || "Non disponibile"}</td>
-                      <td className="px-2 py-3 text-sm text-[var(--text-soft)]">
-                        <form action={removeParticipantAction.bind(null, eventDetail.id, participant.userId)}>
-                          <button type="submit" className="rounded-full border border-[var(--border-subtle)] bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
-                            Rimuovi
-                          </button>
-                        </form>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <ParticipantsSection
+          title="Candidata"
+          emptyMessage="Nessuna candidatura aperta per questo evento."
+          participants={eventDetail.candidataParticipants}
+          actions={(participant) => (
+            <div className="flex flex-wrap gap-2">
+              <form action={acceptCandidateAction.bind(null, eventDetail.id, participant.userId)}>
+                <button type="submit" className="rounded-full bg-[var(--brand-red)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-[var(--brand-red-deep)]">
+                  Accetta
+                </button>
+              </form>
+              <form action={rejectCandidateAction.bind(null, eventDetail.id, participant.userId)}>
+                <button type="submit" className="rounded-full border border-[var(--border-subtle)] bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
+                  Rifiuta
+                </button>
+              </form>
             </div>
           )}
-        </section>
+        />
+
+        <ParticipantsSection
+          title="Partecipa"
+          emptyMessage="Nessun volontario confermato per questo evento."
+          participants={eventDetail.partecipaParticipants}
+        />
+
+        <ParticipantsSection
+          title="NonInteressata"
+          emptyMessage="Nessun volontario ha escluso questo evento."
+          participants={eventDetail.nonInteressataParticipants}
+        />
+
+        <ParticipantsSection
+          title="Rifiutata"
+          emptyMessage="Nessuna candidatura rifiutata per questo evento."
+          participants={eventDetail.rifiutataParticipants}
+        />
 
         <div className="mt-6 flex flex-col gap-3 border-t border-[var(--border-subtle)] pt-5 sm:flex-row sm:items-center sm:justify-end">
           <Link href={`/events/${eventDetail.id}/edit`} className="inline-flex justify-center rounded-full border border-[var(--border-subtle)] bg-white px-5 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-soft)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]">
@@ -180,5 +188,51 @@ function InfoCard({ label, value }: { label: string; value: string }) {
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">{label}</p>
       <p className="mt-2 text-sm text-[var(--text-soft)]">{value}</p>
     </div>
+  );
+}
+
+function ParticipantsSection({
+  title,
+  emptyMessage,
+  participants,
+  actions,
+}: {
+  title: string;
+  emptyMessage: string;
+  participants: EventVolunteerDto[];
+  actions?: (participant: EventVolunteerDto) => React.ReactNode;
+}) {
+  return (
+    <section className="mt-6 rounded-2xl border border-[var(--border-subtle)] bg-white px-5 py-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">{title}</p>
+      {participants.length === 0 ? (
+        <p className="mt-3 text-sm text-[var(--text-soft)]">{emptyMessage}</p>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-[720px] border-collapse">
+            <thead>
+              <tr className="border-b border-[var(--border-subtle)] text-left">
+                <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Nome</th>
+                <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Cognome</th>
+                <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Email</th>
+                <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Telefono</th>
+                {actions ? <th className="px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Azioni</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {participants.map((participant) => (
+                <tr key={participant.userId} className="border-b border-[var(--border-subtle)]/70 last:border-b-0">
+                  <td className="px-2 py-3 text-sm font-semibold text-[var(--text-strong)]">{participant.firstName}</td>
+                  <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.lastName}</td>
+                  <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.email}</td>
+                  <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{participant.phone?.trim() || "Non disponibile"}</td>
+                  {actions ? <td className="px-2 py-3 text-sm text-[var(--text-soft)]">{actions(participant)}</td> : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

@@ -128,8 +128,10 @@ function mapEventStatus(value: unknown): EventStatus | null {
 }
 
 function mapParticipationStatus(value: unknown): ParticipationStatus | null {
-  if (value === 0 || value === 'Accepted') return 'Accepted';
-  if (value === 1 || value === 'Refused') return 'Refused';
+  if (value === 0 || value === 'Candidata') return 'Candidata';
+  if (value === 1 || value === 'Partecipa') return 'Partecipa';
+  if (value === 2 || value === 'Rifiutata') return 'Rifiutata';
+  if (value === 3 || value === 'NonInteressata') return 'NonInteressata';
   return null;
 }
 
@@ -373,25 +375,31 @@ export async function fetchMyEvents(
   }
 }
 
-export async function setEventParticipation(
-  eventId: number,
-  status: ParticipationStatus,
+async function mutateParticipation(
+  path: string,
+  method: 'PUT' | 'DELETE',
+  networkMessage: string,
+  baseMessage: string,
 ): Promise<ApiResult<ParticipantEventResponse>> {
   let response: Response;
   try {
-    response = await fetchJson(`/events/${eventId}/participation`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
+    response = await fetchJson(
+      path,
+      method === 'PUT'
+        ? {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }
+        : { method },
+    );
   } catch {
-    return { ok: false, message: 'Backend non raggiungibile durante il salvataggio partecipazione.' };
+    return { ok: false, message: networkMessage };
   }
 
   if (!response.ok) {
     const detail = await readHttpErrorMessage(response);
-    const baseMessage = `Salvataggio partecipazione fallito (${response.status}).`;
-    return { ok: false, statusCode: response.status, message: detail ? `${baseMessage} ${detail}` : baseMessage };
+    return { ok: false, statusCode: response.status, message: detail ? `${baseMessage} (${response.status}). ${detail}` : `${baseMessage} (${response.status}).` };
   }
 
   let payload: unknown;
@@ -407,6 +415,33 @@ export async function setEventParticipation(
   }
 
   return { ok: true, data: participantEvent };
+}
+
+export async function applyForEvent(eventId: number): Promise<ApiResult<ParticipantEventResponse>> {
+  return mutateParticipation(
+    `/events/${eventId}/participation/candidata`,
+    'PUT',
+    'Backend non raggiungibile durante la candidatura all\'evento.',
+    'Candidatura all\'evento fallita',
+  );
+}
+
+export async function markEventNotInterested(eventId: number): Promise<ApiResult<ParticipantEventResponse>> {
+  return mutateParticipation(
+    `/events/${eventId}/participation/non-interessata`,
+    'PUT',
+    'Backend non raggiungibile durante il salvataggio della non disponibilita.',
+    'Aggiornamento non interessata fallito',
+  );
+}
+
+export async function restoreEventAvailability(eventId: number): Promise<ApiResult<ParticipantEventResponse>> {
+  return mutateParticipation(
+    `/events/${eventId}/participation/non-interessata`,
+    'DELETE',
+    'Backend non raggiungibile durante il ripristino disponibilita.',
+    'Ripristino disponibilita fallito',
+  );
 }
 
 export async function fetchMyReport(): Promise<ApiResult<VolunteerReportingResponse>> {
