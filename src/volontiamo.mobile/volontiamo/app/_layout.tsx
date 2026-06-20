@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AuthProvider, useAuth } from '../lib/auth';
+import { NotificationsProvider, useNotifications } from '../lib/notifications';
 import { formatUserType } from '../lib/types';
 import { colors, typography } from '../theme';
 
@@ -13,13 +14,17 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <StatusBar style="dark" />
       <AuthProvider>
-        <AppDrawer />
+        <NotificationsProvider>
+          <AppDrawer />
+        </NotificationsProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );
 }
 
 function AppDrawer() {
+  const { unreadCount } = useNotifications();
+
   return (
       <Drawer
         drawerContent={props => <SessionDrawerContent {...props} />}
@@ -56,6 +61,23 @@ function AppDrawer() {
           options={{
             drawerLabel: 'Eventi',
             title: 'Eventi',
+            headerShown: false,
+          }}
+        />
+        <Drawer.Screen
+          name="(drawer)/notifications"
+          options={{
+            drawerLabel: ({ color }) => (
+              <View style={styles.drawerLabelRow}>
+                <Text style={[styles.drawerLabelText, { color }]}>Notifiche</Text>
+                {unreadCount > 0 ? (
+                  <View style={styles.drawerBadge}>
+                    <Text style={styles.drawerBadgeText}>{unreadCount > 99 ? '99+' : String(unreadCount)}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ),
+            title: 'Notifiche',
             headerShown: false,
           }}
         />
@@ -151,5 +173,28 @@ const styles = StyleSheet.create({
   drawerSignOutText: {
     ...typography.titleMedium,
     color: colors.text.strong,
+  },
+  drawerLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  drawerLabelText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  drawerBadge: {
+    minWidth: 22,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.brand.red,
+  },
+  drawerBadgeText: {
+    ...typography.caption,
+    color: colors.text.inverse,
+    fontWeight: '700',
   },
 });

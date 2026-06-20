@@ -8,6 +8,7 @@ public class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Event> Events => Set<Event>();
     public DbSet<EventParticipation> EventParticipations => Set<EventParticipation>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -86,6 +87,35 @@ public class AppDbContext : DbContext
             entity.HasIndex(p => p.UserId).HasDatabaseName("ix_event_participations_user_id");
             entity.HasIndex(p => p.EventId).HasDatabaseName("ix_event_participations_event_id");
             entity.HasIndex(p => new { p.UserId, p.Status }).HasDatabaseName("ix_event_participations_user_id_status");
+        });
+
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.ToTable("notifications");
+            entity.HasKey(notification => notification.Id);
+
+            entity.Property(notification => notification.Id).HasColumnName("id");
+            entity.Property(notification => notification.UserId).HasColumnName("user_id").IsRequired();
+            entity.Property(notification => notification.Kind).HasColumnName("kind").IsRequired();
+            entity.Property(notification => notification.Title).HasColumnName("title").HasMaxLength(200).IsRequired();
+            entity.Property(notification => notification.Body).HasColumnName("body").HasColumnType("text").IsRequired();
+            entity.Property(notification => notification.EventId).HasColumnName("event_id").IsRequired();
+            entity.Property(notification => notification.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").IsRequired();
+            entity.Property(notification => notification.ReadAt).HasColumnName("read_at").HasColumnType("timestamp with time zone");
+
+            entity.HasOne(notification => notification.Event)
+                .WithMany()
+                .HasForeignKey(notification => notification.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(notification => notification.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(notification => notification.UserId).HasDatabaseName("ix_notifications_user_id");
+            entity.HasIndex(notification => notification.ReadAt).HasDatabaseName("ix_notifications_read_at");
+            entity.HasIndex(notification => notification.CreatedAt).HasDatabaseName("ix_notifications_created_at");
         });
     }
 }

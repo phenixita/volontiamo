@@ -27,6 +27,13 @@ public class UserRepository : IUserRepository
         return new PagedResult<User>(items, totalCount);
     }
 
+    public async Task<IReadOnlyList<User>> ListNotificationCandidatesAsync(CancellationToken ct = default)
+        => await _db.Users
+            .IgnoreQueryFilters()
+            .OrderBy(u => u.LastName)
+            .ThenBy(u => u.FirstName)
+            .ToListAsync(ct);
+
     public async Task<bool> ExistsByEmailAsync(string normalizedEmail, Guid? excludeId = null, CancellationToken ct = default)
     {
         var query = _db.Users.Where(u => u.Email == normalizedEmail);

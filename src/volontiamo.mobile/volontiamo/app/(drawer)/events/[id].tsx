@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
+import { fetchEventDetailById } from '../../../lib/api';
 import { ParticipantEventResponse, ParticipationStatus } from '../../../lib/types';
 import { formatEventDate, formatEventTime } from '../../../lib/datetime';
 import { colors, typography } from '../../../theme';
@@ -37,8 +38,66 @@ function participationLabel(status: ParticipationStatus | null): string {
 }
 
 export default function EventDetailScreen() {
-  const params = useLocalSearchParams<{ event?: string | string[] }>();
-  const event = useMemo(() => parseEvent(params.event), [params.event]);
+  const params = useLocalSearchParams<{ id?: string | string[]; event?: string | string[] }>();
+  const initialEvent = useMemo(() => parseEvent(params.event), [params.event]);
+  const eventId = useMemo(() => {
+    const raw = Array.isArray(params.id) ? params.id[0] : params.id;
+    const parsed = Number(raw);
+    return Number.isInteger(parsed) ? parsed : null;
+  }, [params.id]);
+  const [event, setEvent] = useState<ParticipantEventResponse | null>(initialEvent);
+  const [loading, setLoading] = useState(initialEvent === null && eventId !== null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEvent(initialEvent);
+    setError(null);
+  }, [initialEvent]);
+
+  useEffect(() => {
+    if (initialEvent || eventId === null) {
+      setLoading(false);
+      return;
+    }
+
+    let active = true;
+    setLoading(true);
+    setError(null);
+
+    fetchEventDetailById(eventId)
+      .then(result => {
+        if (!active) return;
+
+        if (!result.ok) {
+          setError(result.message);
+          setEvent(null);
+          return;
+        }
+
+        setEvent(result.data);
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [eventId, initialEvent]);
+
+  if (loading) {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Dettagli evento' }} />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.brand.red} />
+          <Text style={styles.loadingText}>Caricamento dettaglio evento…</Text>
+        </View>
+      </>
+    );
+  }
 
   if (!event) {
     return (
@@ -48,7 +107,7 @@ export default function EventDetailScreen() {
           <Text style={styles.errorEmoji}>⚠️</Text>
           <Text style={styles.errorTitle}>Evento non disponibile</Text>
           <Text style={styles.errorMessage}>
-            Impossibile mostrare i dettagli dell&apos;evento. Torna indietro e riprova.
+            {error ?? 'Impossibile mostrare i dettagli dell&apos;evento. Torna indietro e riprova.'}
           </Text>
         </View>
       </>
@@ -208,6 +267,11 @@ const styles = StyleSheet.create({
     color: colors.text.soft,
     textAlign: 'center',
     marginTop: 8,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.text.soft,
+    marginTop: 12,
   },
 });
 

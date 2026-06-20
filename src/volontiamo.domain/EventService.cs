@@ -87,11 +87,16 @@ public sealed class EventService
     };
 
     private readonly IEventRepository _repository;
+    private readonly INotificationService _notificationService;
     private readonly TimeProvider _timeProvider;
 
-    public EventService(IEventRepository repository, TimeProvider? timeProvider = null)
+    public EventService(
+        IEventRepository repository,
+        INotificationService? notificationService = null,
+        TimeProvider? timeProvider = null)
     {
         _repository = repository;
+        _notificationService = notificationService ?? NoOpNotificationService.Instance;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -110,6 +115,8 @@ public sealed class EventService
             request.Status);
 
         await _repository.AddAsync(eventItem, ct);
+        if (ShouldNotifyOnCreate(eventItem))
+            await _notificationService.CreateEventCreatedNotificationsAsync(eventItem, ct);
         await _repository.SaveChangesAsync(ct);
 
         return Result<EventResponse>.Success(MapToResponse(eventItem, 0, 0));
@@ -125,6 +132,8 @@ public sealed class EventService
         if (validationErrors.Count > 0)
             return Result<bool>.ValidationFailure(validationErrors);
 
+        var previousStatus = eventItem.Status;
+
         eventItem.Update(
             request.Name,
             request.StartAtUtc,
@@ -132,6 +141,9 @@ public sealed class EventService
             request.Location,
             request.OperationalNotesMarkdown,
             request.Status);
+
+        if (ShouldNotifyOnActivation(previousStatus, eventItem.Status))
+            await _notificationService.CreateEventCreatedNotificationsAsync(eventItem, ct);
 
         await _repository.SaveChangesAsync(ct);
 
@@ -293,6 +305,12 @@ public sealed class EventService
         return errors;
     }
 
+    private static bool ShouldNotifyOnCreate(Event eventItem)
+        => eventItem.Status == EventStatus.Active;
+
+    private static bool ShouldNotifyOnActivation(EventStatus previousStatus, EventStatus currentStatus)
+        => previousStatus == EventStatus.Draft && currentStatus == EventStatus.Active;
+
     private async Task<Result<bool>> FinalizeCandidateAsync(
         int eventId,
         Guid userId,
@@ -437,5 +455,16 @@ public sealed class EventService
         public static SelectableEventResolution<TResult> Success(Event eventItem) => new(eventItem, null);
         public static SelectableEventResolution<TResult> NotFound() => new(null, Result<TResult>.NotFound());
         public static SelectableEventResolution<TResult> Conflict(string message) => new(null, Result<TResult>.Conflict(message));
+    }
+
+    private sealed class NoOpNotificationService : INotificationService
+    {
+        public static readonly NoOpNotificationService Instance = new();
+
+        public Task CreateEventCreatedNotificationsAsync(Event eventItem, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<PagedResponse<NotificationResponse>> ListInboxAsync(ListNotificationsRequest request, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<UnreadNotificationsCountResponse> GetUnreadCountAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<Result<NotificationResponse>> MarkAsReadAsync(MarkNotificationAsReadRequest request, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<Result<int>> MarkAllAsReadAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
     }
 }

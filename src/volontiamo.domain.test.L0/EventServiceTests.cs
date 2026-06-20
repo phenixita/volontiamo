@@ -76,6 +76,37 @@ public class EventServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_WhenEventIsCreatedAsActive_TriggersNotificationsBeforeSaving()
+    {
+        var repository = new FakeEventRepository();
+        var notifications = new FakeNotificationService();
+        var service = new EventService(repository, notifications);
+
+        var result = await service.CreateAsync(ValidCreateRequest() with { Status = EventStatus.Active });
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.NotNull(notifications.LastEvent);
+        Assert.Equal(repository.LastAddedEvent, notifications.LastEvent);
+        Assert.Equal(1, notifications.CreateEventCreatedNotificationsCallCount);
+        Assert.Equal(1, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenEventIsCreatedAsDraft_DoesNotTriggerNotifications()
+    {
+        var repository = new FakeEventRepository();
+        var notifications = new FakeNotificationService();
+        var service = new EventService(repository, notifications);
+
+        var result = await service.CreateAsync(ValidCreateRequest());
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.Null(notifications.LastEvent);
+        Assert.Equal(0, notifications.CreateEventCreatedNotificationsCallCount);
+        Assert.Equal(1, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
     public async Task ListAsync_WhenStatusesAreMissing_UsesDraftAndActiveDefaults()
     {
         var repository = new FakeEventRepository { ListResult = new PagedResult<EventListItem>([], 0) };
@@ -551,6 +582,58 @@ public class EventServiceTests
     }
 
     [Fact]
+    public async Task UpdateAsync_WhenStatusTransitionsFromDraftToActive_TriggersNotificationsBeforeSaving()
+    {
+        var eventItem = CreateEvent(id: 25, name: "Bozza", status: EventStatus.Draft, startAtUtc: Utc(2026, 7, 1, 8));
+        var repository = new FakeEventRepository { Events = [eventItem] };
+        var notifications = new FakeNotificationService();
+        var service = CreateService(repository, notifications);
+
+        var result = await service.UpdateAsync(eventItem.Id, ValidUpdateRequest(status: EventStatus.Active));
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.Equal(eventItem, notifications.LastEvent);
+        Assert.Equal(1, notifications.CreateEventCreatedNotificationsCallCount);
+        Assert.Equal(1, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenStatusDoesNotTransitionFromDraftToActive_DoesNotTriggerNotifications()
+    {
+        var eventItem = CreateEvent(id: 26, name: "Gia' attivo", status: EventStatus.Active, startAtUtc: Utc(2026, 7, 1, 8));
+        var repository = new FakeEventRepository { Events = [eventItem] };
+        var notifications = new FakeNotificationService();
+        var service = CreateService(repository, notifications);
+
+        var result = await service.UpdateAsync(eventItem.Id, ValidUpdateRequest(status: EventStatus.Active));
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        Assert.Null(notifications.LastEvent);
+        Assert.Equal(0, notifications.CreateEventCreatedNotificationsCallCount);
+        Assert.Equal(1, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenEventIsReactivatedFromDraftToActiveAgain_TriggersNotificationsEachTime()
+    {
+        var eventItem = CreateEvent(id: 27, name: "Riattivabile", status: EventStatus.Draft, startAtUtc: Utc(2026, 7, 1, 8));
+        var repository = new FakeEventRepository { Events = [eventItem] };
+        var notifications = new FakeNotificationService();
+        var service = CreateService(repository, notifications);
+
+        var firstActivation = await service.UpdateAsync(eventItem.Id, ValidUpdateRequest(status: EventStatus.Active));
+        var rollbackToDraft = await service.UpdateAsync(eventItem.Id, ValidUpdateRequest(status: EventStatus.Draft));
+        var secondActivation = await service.UpdateAsync(eventItem.Id, ValidUpdateRequest(status: EventStatus.Active));
+
+        Assert.Equal(ResultStatus.Ok, firstActivation.Status);
+        Assert.Equal(ResultStatus.Ok, rollbackToDraft.Status);
+        Assert.Equal(ResultStatus.Ok, secondActivation.Status);
+        Assert.Equal(eventItem, notifications.LastEvent);
+        Assert.Equal(2, notifications.CreateEventCreatedNotificationsCallCount);
+        Assert.Equal(3, repository.SaveChangesCallCount);
+    }
+
+    [Fact]
     public async Task UpdateAsync_WhenEventIsMissing_ReturnsNotFound()
     {
         var repository = new FakeEventRepository();
@@ -709,8 +792,8 @@ public class EventServiceTests
         return eventItem;
     }
 
-    private static EventService CreateService(FakeEventRepository repository)
-        => new(repository, new FixedTimeProvider(FixedNowUtc));
+    private static EventService CreateService(FakeEventRepository repository, INotificationService? notifications = null)
+        => new(repository, notifications, new FixedTimeProvider(FixedNowUtc));
 
     private static DateTime Utc(int year, int month, int day, int hour)
         => new(year, month, day, hour, 0, 0, DateTimeKind.Utc);
@@ -807,6 +890,31 @@ public class EventServiceTests
             SaveChangesCallCount++;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FakeNotificationService : INotificationService
+    {
+        public Event? LastEvent { get; private set; }
+        public int CreateEventCreatedNotificationsCallCount { get; private set; }
+
+        public Task CreateEventCreatedNotificationsAsync(Event eventItem, CancellationToken ct = default)
+        {
+            LastEvent = eventItem;
+            CreateEventCreatedNotificationsCallCount++;
+            return Task.CompletedTask;
+        }
+
+        public Task<PagedResponse<NotificationResponse>> ListInboxAsync(ListNotificationsRequest request, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<UnreadNotificationsCountResponse> GetUnreadCountAsync(Guid userId, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<Result<NotificationResponse>> MarkAsReadAsync(MarkNotificationAsReadRequest request, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<Result<int>> MarkAllAsReadAsync(Guid userId, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class FixedTimeProvider : TimeProvider

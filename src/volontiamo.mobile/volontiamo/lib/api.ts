@@ -8,6 +8,8 @@ import {
   EventResponse,
   EventStatus,
   LoginSuccess,
+  NotificationKind,
+  NotificationResponse,
   PagedResponse,
   ParticipantEventListView,
   ParticipantEventResponse,
@@ -135,6 +137,11 @@ function mapParticipationStatus(value: unknown): ParticipationStatus | null {
   return null;
 }
 
+function mapNotificationKind(value: unknown): NotificationKind | null {
+  if (value === 0 || value === 'EventCreated') return 'EventCreated';
+  return null;
+}
+
 function mapAuthenticatedUser(value: unknown): AuthenticatedUser | null {
   if (!isRecord(value)) {
     return null;
@@ -227,6 +234,62 @@ function mapParticipantEvent(value: unknown): ParticipantEventResponse | null {
   };
 }
 
+function mapEventDetailAsParticipant(value: unknown): ParticipantEventResponse | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.id !== 'number' ||
+    typeof value.name !== 'string' ||
+    typeof value.startAtUtc !== 'string' ||
+    typeof value.endAtUtc !== 'string' ||
+    (typeof value.location !== 'string' && value.location !== null) ||
+    typeof value.operationalNotesMarkdown !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    name: value.name,
+    startAtUtc: value.startAtUtc,
+    endAtUtc: value.endAtUtc,
+    location: value.location,
+    operationalNotesMarkdown: value.operationalNotesMarkdown,
+    participationStatus: null,
+  };
+}
+
+function mapNotification(value: unknown): NotificationResponse | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const kind = mapNotificationKind(value.kind);
+  if (
+    typeof value.id !== 'string' ||
+    kind === null ||
+    typeof value.title !== 'string' ||
+    typeof value.body !== 'string' ||
+    typeof value.eventId !== 'number' ||
+    typeof value.createdAt !== 'string' ||
+    (typeof value.readAt !== 'string' && value.readAt !== null)
+  ) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    kind,
+    title: value.title,
+    body: value.body,
+    eventId: value.eventId,
+    createdAt: value.createdAt,
+    readAt: value.readAt,
+  };
+}
+
 function mapEventsPage(value: unknown, page: number, pageSize: number): PagedResponse<EventResponse> | null {
   if (!isRecord(value) || !Array.isArray(value.items)) {
     return null;
@@ -261,6 +324,32 @@ function mapParticipantEventsPage(value: unknown, page: number, pageSize: number
     pageSize: typeof value.pageSize === 'number' ? value.pageSize : pageSize,
     totalCount: value.totalCount,
   };
+}
+
+function mapNotificationsPage(value: unknown, page: number, pageSize: number): PagedResponse<NotificationResponse> | null {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    return null;
+  }
+
+  const items = value.items.map(mapNotification);
+  if (items.some(item => item === null) || typeof value.totalCount !== 'number') {
+    return null;
+  }
+
+  return {
+    items: items as NotificationResponse[],
+    page: typeof value.page === 'number' ? value.page : page,
+    pageSize: typeof value.pageSize === 'number' ? value.pageSize : pageSize,
+    totalCount: value.totalCount,
+  };
+}
+
+function mapUnreadCount(value: unknown): number | null {
+  if (!isRecord(value) || typeof value.unreadCount !== 'number') {
+    return null;
+  }
+
+  return value.unreadCount;
 }
 
 function mapVolunteerReporting(value: unknown): VolunteerReportingResponse | null {
@@ -313,6 +402,18 @@ function emptyParticipantEventsResponse(
   page: number,
   pageSize: number,
 ): PagedResponse<ParticipantEventResponse> {
+  return {
+    items: [],
+    page,
+    pageSize,
+    totalCount: 0,
+  };
+}
+
+function emptyNotificationsResponse(
+  page: number,
+  pageSize: number,
+): PagedResponse<NotificationResponse> {
   return {
     items: [],
     page,
@@ -375,6 +476,61 @@ export async function fetchMyEvents(
   }
 }
 
+export async function fetchNotificationsInbox(
+  page: number = 1,
+  pageSize: number = 15,
+): Promise<PagedResponse<NotificationResponse>> {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+
+  try {
+    const response = await fetchJson(`/notifications?${params}`);
+
+    if (!response.ok) {
+      console.warn(`Notifications API unavailable: ${response.status}`);
+      return emptyNotificationsResponse(page, pageSize);
+    }
+
+    const payload: unknown = await response.json();
+    const mapped = mapNotificationsPage(payload, page, pageSize);
+    return mapped ?? emptyNotificationsResponse(page, pageSize);
+  } catch (error) {
+    console.warn('Notifications API request failed', error);
+    return emptyNotificationsResponse(page, pageSize);
+  }
+}
+
+export async function fetchUnreadNotificationsCount(): Promise<ApiResult<number>> {
+  let response: Response;
+  try {
+    response = await fetchJson('/notifications/unread-count');
+  } catch {
+    return { ok: false, message: 'Backend non raggiungibile durante il conteggio notifiche.' };
+  }
+
+  if (!response.ok) {
+    const detail = await readHttpErrorMessage(response);
+    const baseMessage = `Lettura conteggio notifiche fallita (${response.status}).`;
+    return { ok: false, statusCode: response.status, message: detail ? `${baseMessage} ${detail}` : baseMessage };
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    return { ok: false, message: 'Il backend ha restituito un payload conteggio notifiche non JSON.' };
+  }
+
+  const unreadCount = mapUnreadCount(payload);
+  if (unreadCount === null) {
+    return { ok: false, message: 'Il payload conteggio notifiche non rispetta il contratto previsto.' };
+  }
+
+  return { ok: true, data: unreadCount };
+}
+
 async function mutateParticipation(
   path: string,
   method: 'PUT' | 'DELETE',
@@ -415,6 +571,64 @@ async function mutateParticipation(
   }
 
   return { ok: true, data: participantEvent };
+}
+
+export async function markNotificationAsRead(id: string): Promise<ApiResult<NotificationResponse>> {
+  let response: Response;
+  try {
+    response = await fetchJson(`/notifications/${id}/read`, { method: 'PUT' });
+  } catch {
+    return { ok: false, message: 'Backend non raggiungibile durante la marcatura della notifica.' };
+  }
+
+  if (!response.ok) {
+    const detail = await readHttpErrorMessage(response);
+    const baseMessage = `Marcatura notifica fallita (${response.status}).`;
+    return { ok: false, statusCode: response.status, message: detail ? `${baseMessage} ${detail}` : baseMessage };
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    return { ok: false, message: 'Il backend ha restituito un payload notifica non JSON.' };
+  }
+
+  const notification = mapNotification(payload);
+  if (!notification) {
+    return { ok: false, message: 'Il payload notifica non rispetta il contratto previsto.' };
+  }
+
+  return { ok: true, data: notification };
+}
+
+export async function markAllNotificationsAsRead(): Promise<ApiResult<number>> {
+  let response: Response;
+  try {
+    response = await fetchJson('/notifications/read-all', { method: 'PUT' });
+  } catch {
+    return { ok: false, message: 'Backend non raggiungibile durante la marcatura di tutte le notifiche.' };
+  }
+
+  if (!response.ok) {
+    const detail = await readHttpErrorMessage(response);
+    const baseMessage = `Marcatura massiva notifiche fallita (${response.status}).`;
+    return { ok: false, statusCode: response.status, message: detail ? `${baseMessage} ${detail}` : baseMessage };
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    return { ok: false, message: 'Il backend ha restituito un payload marcatura notifiche non JSON.' };
+  }
+
+  const unreadCount = mapUnreadCount(payload);
+  if (unreadCount === null) {
+    return { ok: false, message: 'Il payload marcatura notifiche non rispetta il contratto previsto.' };
+  }
+
+  return { ok: true, data: unreadCount };
 }
 
 export async function applyForEvent(eventId: number): Promise<ApiResult<ParticipantEventResponse>> {
@@ -471,6 +685,35 @@ export async function fetchMyReport(): Promise<ApiResult<VolunteerReportingRespo
   }
 
   return { ok: true, data: report };
+}
+
+export async function fetchEventDetailById(eventId: number): Promise<ApiResult<ParticipantEventResponse>> {
+  let response: Response;
+  try {
+    response = await fetchJson(`/events/${eventId}`);
+  } catch {
+    return { ok: false, message: 'Backend non raggiungibile durante il caricamento del dettaglio evento.' };
+  }
+
+  if (!response.ok) {
+    const detail = await readHttpErrorMessage(response);
+    const baseMessage = `Lettura dettaglio evento fallita (${response.status}).`;
+    return { ok: false, statusCode: response.status, message: detail ? `${baseMessage} ${detail}` : baseMessage };
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    return { ok: false, message: 'Il backend ha restituito un payload dettaglio evento non JSON.' };
+  }
+
+  const event = mapEventDetailAsParticipant(payload);
+  if (!event) {
+    return { ok: false, message: 'Il payload dettaglio evento non rispetta il contratto previsto.' };
+  }
+
+  return { ok: true, data: event };
 }
 
 export async function loginWithPassword(email: string, password: string): Promise<ApiResult<LoginSuccess>> {

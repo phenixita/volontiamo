@@ -47,6 +47,18 @@ export type ParticipantEventResponse = {
   participationStatus: ParticipationStatus | null;
 };
 
+export type NotificationKind = 'EventCreated';
+
+export type NotificationResponse = {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  eventId: number;
+  createdAt: string;
+  readAt: string | null;
+};
+
 export type PagedResponse<T> = {
   items: T[];
   page: number;

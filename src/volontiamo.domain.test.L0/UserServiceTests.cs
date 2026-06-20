@@ -377,6 +377,9 @@ public class UserServiceTests
             return Task.FromResult(result);
         }
 
+        public Task<IReadOnlyList<User>> ListNotificationCandidatesAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<User>>([]);
+
         public Task<bool> ExistsByEmailAsync(string normalizedEmail, Guid? excludeId = null, CancellationToken ct = default)
         {
             LastExistsByEmailInput = normalizedEmail;
