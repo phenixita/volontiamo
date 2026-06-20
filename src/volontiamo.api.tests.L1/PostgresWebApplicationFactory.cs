@@ -12,8 +12,7 @@ public class PostgresWebApplicationFactory : WebApplicationFactory<Program>, IAs
     public const string SeedEmail = "admin@volontiamo.local";
     public const string SeedPassword = "Volontiamo123!";
 
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .Build();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)

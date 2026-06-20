@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using volontiamo.api.Auth;
 using volontiamo.api.Events;
 using volontiamo.api.Persistence;
+using volontiamo.api.Reports;
 using volontiamo.api.Users;
 using volontiamo.domain;
 
@@ -17,6 +18,8 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<volontiamo.domain.AuthenticationService>();
 builder.Services.AddScoped<IEventRepository, EventRepository>();
 builder.Services.AddScoped<EventService>();
+builder.Services.AddScoped<IReportingRepository, ReportingRepository>();
+builder.Services.AddScoped<ReportingService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IBearerTokenService, BearerTokenService>();
 
@@ -55,6 +58,7 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapEventEndpoints();
+app.MapReportEndpoints();
 
 app.Run();
 

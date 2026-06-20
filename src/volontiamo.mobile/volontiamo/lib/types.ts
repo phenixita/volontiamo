@@ -54,6 +54,13 @@ export type PagedResponse<T> = {
   totalCount: number;
 };
 
+export type VolunteerReportingResponse = {
+  totalHours: number;
+  participatedEventsCount: number;
+  rank: number;
+  totalVolunteers: number;
+};
+
 export function formatUserType(userType: UserType): string {
   return userType === 0 ? 'Lilt' : 'Volontario';
 }

@@ -13,6 +13,7 @@ import {
   ParticipantEventResponse,
   ParticipationStatus,
   UserType,
+  VolunteerReportingResponse,
 } from './types';
 
 const API_PORT = 5159;
@@ -260,6 +261,28 @@ function mapParticipantEventsPage(value: unknown, page: number, pageSize: number
   };
 }
 
+function mapVolunteerReporting(value: unknown): VolunteerReportingResponse | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.totalHours !== 'number'
+    || typeof value.participatedEventsCount !== 'number'
+    || typeof value.rank !== 'number'
+    || typeof value.totalVolunteers !== 'number'
+  ) {
+    return null;
+  }
+
+  return {
+    totalHours: value.totalHours,
+    participatedEventsCount: value.participatedEventsCount,
+    rank: value.rank,
+    totalVolunteers: value.totalVolunteers,
+  };
+}
+
 async function fetchJson(path: string, init: RequestInit = {}, token?: string | null): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
@@ -384,6 +407,35 @@ export async function setEventParticipation(
   }
 
   return { ok: true, data: participantEvent };
+}
+
+export async function fetchMyReport(): Promise<ApiResult<VolunteerReportingResponse>> {
+  let response: Response;
+  try {
+    response = await fetchJson('/reports/me');
+  } catch {
+    return { ok: false, message: 'Backend non raggiungibile durante il caricamento delle statistiche.' };
+  }
+
+  if (!response.ok) {
+    const detail = await readHttpErrorMessage(response);
+    const baseMessage = `Lettura statistiche fallita (${response.status}).`;
+    return { ok: false, statusCode: response.status, message: detail ? `${baseMessage} ${detail}` : baseMessage };
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    return { ok: false, message: 'Il backend ha restituito un payload statistiche non JSON.' };
+  }
+
+  const report = mapVolunteerReporting(payload);
+  if (!report) {
+    return { ok: false, message: 'Il payload statistiche non rispetta il contratto previsto.' };
+  }
+
+  return { ok: true, data: report };
 }
 
 export async function loginWithPassword(email: string, password: string): Promise<ApiResult<LoginSuccess>> {

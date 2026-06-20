@@ -37,7 +37,11 @@ public class EventRepository : IEventRepository
                 eventItem,
                 _db.EventParticipations.Count(participation =>
                     participation.EventId == eventItem.Id
-                    && participation.Status == EventParticipationStatus.Accepted)))
+                    && participation.Status == EventParticipationStatus.Accepted
+                    && _db.Users.Any(user =>
+                        user.Id == participation.UserId
+                        && !user.IsDeleted
+                        && user.UserType == UserType.Volontario))))
             .ToListAsync(ct);
 
         return new PagedResult<EventListItem>(items, totalCount);
@@ -54,6 +58,8 @@ public class EventRepository : IEventRepository
             join user in _db.Users on participation.UserId equals user.Id
             where participation.EventId == id
                && participation.Status == EventParticipationStatus.Accepted
+               && !user.IsDeleted
+               && user.UserType == UserType.Volontario
             orderby user.LastName, user.FirstName
             select new EventAcceptedParticipant(
                 user.Id,

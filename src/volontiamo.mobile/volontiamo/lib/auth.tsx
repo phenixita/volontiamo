@@ -4,6 +4,8 @@ import { getCurrentUser, loginWithPassword } from './api';
 import { clearSessionToken, readSessionToken, saveSessionToken } from './session';
 import { AuthenticatedUser } from './types';
 
+const VOLUNTEER_ONLY_MESSAGE = 'Questa app e riservata ai volontari. Accedi con un account volontario.';
+
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
 type AuthContextValue = {
@@ -17,6 +19,10 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function isVolunteer(user: AuthenticatedUser): boolean {
+  return user.userType === 1;
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
@@ -26,6 +32,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     await clearSessionToken();
     setUser(null);
     setError(null);
+    setStatus('unauthenticated');
+  }, []);
+
+  const rejectNonVolunteerSession = useCallback(async () => {
+    await clearSessionToken();
+    setUser(null);
+    setError(VOLUNTEER_ONLY_MESSAGE);
     setStatus('unauthenticated');
   }, []);
 
@@ -47,10 +60,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return;
     }
 
+    if (!isVolunteer(result.data)) {
+      await rejectNonVolunteerSession();
+      return;
+    }
+
     setUser(result.data);
     setError(null);
     setStatus('authenticated');
-  }, []);
+  }, [rejectNonVolunteerSession]);
 
   useEffect(() => {
     let active = true;
@@ -75,6 +93,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return;
       }
 
+      if (!isVolunteer(result.data)) {
+        await rejectNonVolunteerSession();
+        return;
+      }
+
       setUser(result.data);
       setError(null);
       setStatus('authenticated');
@@ -85,7 +108,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [rejectNonVolunteerSession]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const result = await loginWithPassword(email, password);
@@ -95,12 +118,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return { ok: false as const, message: result.message };
     }
 
+    if (!isVolunteer(result.data.user)) {
+      await rejectNonVolunteerSession();
+      return { ok: false as const, message: VOLUNTEER_ONLY_MESSAGE };
+    }
+
     await saveSessionToken(result.data.accessToken);
     setUser(result.data.user);
     setError(null);
     setStatus('authenticated');
     return { ok: true as const };
-  }, []);
+  }, [rejectNonVolunteerSession]);
 
   const value = useMemo<AuthContextValue>(() => ({
     status,

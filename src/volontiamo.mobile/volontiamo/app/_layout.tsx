@@ -66,6 +66,13 @@ function AppDrawer() {
             title: 'Profilo',
           }}
         />
+        <Drawer.Screen
+          name="(drawer)/stats"
+          options={{
+            drawerLabel: 'Statistiche',
+            title: 'Statistiche',
+          }}
+        />
       </Drawer>
   );
 }

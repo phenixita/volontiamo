@@ -5,18 +5,19 @@ import type { AuthenticatedUserDto } from "@/lib/auth/contracts";
 import { formatUserType } from "@/lib/auth/contracts";
 
 type AppShellProps = {
-  activePath: "/" | "/users" | "/events";
+  activePath: "/" | "/users" | "/events" | "/reports";
   title: string;
   eyebrow: string;
   currentUser: AuthenticatedUserDto;
   badge?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 };
 
 const navItems = [
   { href: "/", label: "Home" },
   { href: "/users", label: "Utenti" },
   { href: "/events", label: "Eventi" },
+  { href: "/reports", label: "Report" },
 ] as const;
 
 function navClass(isActive: boolean): string {
@@ -90,6 +91,11 @@ export function AppShell({ activePath, title, eyebrow, currentUser, badge, child
                   <span className="font-[family:var(--font-display)] text-4xl leading-none text-[var(--text-strong)] sm:text-5xl">
                     {title}
                   </span>
+                  {badge ? (
+                    <span className="rounded-full bg-[var(--surface-subtle)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-soft)]">
+                      {badge}
+                    </span>
+                  ) : null}
                   <span className="pb-1 text-sm font-medium uppercase tracking-[0.18em] text-[var(--text-soft)] sm:text-base">
                     Coordinamento operativo
                   </span>

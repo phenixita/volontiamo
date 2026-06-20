@@ -1,0 +1,5 @@
+C:\dev\volontiamo\src\volontiamo.domain\.artifacts\test-obj\Debug\net10.0\volontiamo.domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\dev\volontiamo\src\volontiamo.domain\.artifacts\test-obj\Debug\net10.0\volontiamo.domain.AssemblyInfoInputs.cache
+C:\dev\volontiamo\src\volontiamo.domain\.artifacts\test-obj\Debug\net10.0\volontiamo.domain.AssemblyInfo.cs
+C:\dev\volontiamo\src\volontiamo.domain\.artifacts\test-obj\Debug\net10.0\volontiamo.domain.csproj.CoreCompileInputs.cache
+C:\dev\volontiamo\src\volontiamo.domain\.artifacts\test-obj\Debug\net10.0\volontiamo.domain.sourcelink.json

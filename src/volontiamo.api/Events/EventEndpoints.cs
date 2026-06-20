@@ -69,11 +69,21 @@ public static class EventEndpoints
         [FromQuery] string? view,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
+        [FromServices] AuthenticationService authService,
         [FromServices] EventService service,
         CancellationToken ct)
     {
-        if (!TryGetCurrentUserId(context, out var userId))
-            return Results.Unauthorized();
+        var currentUser = await GetCurrentUserAsync(context, authService, ct);
+        if (currentUser.Error is not null)
+            return currentUser.Error;
+
+        if (currentUser.User!.UserType != UserType.Volontario)
+        {
+            return Results.Problem(
+                detail: "Only volunteers can access personal event participation.",
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Forbidden");
+        }
 
         if (!TryParseParticipantView(view, out var mode))
         {
@@ -84,7 +94,7 @@ public static class EventEndpoints
         }
 
         var request = new ParticipantEventListRequest(
-            userId,
+            currentUser.User.Id,
             mode,
             page ?? 1,
             pageSize ?? 10);
@@ -114,11 +124,21 @@ public static class EventEndpoints
         int id,
         HttpContext context,
         [FromBody] EventParticipationStatusRequest request,
+        [FromServices] AuthenticationService authService,
         [FromServices] EventService service,
         CancellationToken ct)
     {
-        if (!TryGetCurrentUserId(context, out var userId))
-            return Results.Unauthorized();
+        var currentUser = await GetCurrentUserAsync(context, authService, ct);
+        if (currentUser.Error is not null)
+            return currentUser.Error;
+
+        if (currentUser.User!.UserType != UserType.Volontario)
+        {
+            return Results.Problem(
+                detail: "Only volunteers can change event participation.",
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Forbidden");
+        }
 
         if (!TryParseParticipationStatus(request.Status, out var status))
         {
@@ -128,7 +148,7 @@ public static class EventEndpoints
             });
         }
 
-        var result = await service.SetParticipationAsync(id, new SetEventParticipationRequest(userId, status), ct);
+        var result = await service.SetParticipationAsync(id, new SetEventParticipationRequest(currentUser.User.Id, status), ct);
         return result.Status switch
         {
             ResultStatus.Ok => Results.Ok(result.Value),
@@ -238,10 +258,29 @@ public static class EventEndpoints
         public static StatusParseResult Failure() => new(false, null);
     }
 
-    private static bool TryGetCurrentUserId(HttpContext context, out Guid userId)
+    private static async Task<CurrentUserResolution> GetCurrentUserAsync(
+        HttpContext context,
+        AuthenticationService authService,
+        CancellationToken ct)
     {
-        var claimValue = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return Guid.TryParse(claimValue, out userId);
+        var rawUserId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(rawUserId, out var userId))
+            return new CurrentUserResolution(null, Results.Unauthorized());
+
+        var result = await authService.GetCurrentUserAsync(userId, ct);
+        return result.Status switch
+        {
+            ResultStatus.Ok => new CurrentUserResolution(result.Value, null),
+            ResultStatus.NotFound => new CurrentUserResolution(null, Results.Problem(
+                detail: "User not found.",
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Not Found")),
+            ResultStatus.Unauthorized => new CurrentUserResolution(null, Results.Problem(
+                detail: result.ErrorMessage,
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized")),
+            _ => new CurrentUserResolution(null, Results.StatusCode(StatusCodes.Status500InternalServerError))
+        };
     }
 
     private static bool TryParseParticipantView(string? view, out ParticipantEventListMode mode)
@@ -270,6 +309,8 @@ public static class EventEndpoints
         status = EventParticipationStatus.Accepted;
         return false;
     }
+
+    private sealed record CurrentUserResolution(AuthenticatedUserResponse? User, IResult? Error);
 
     private sealed record EventParticipationStatusRequest(string? Status);
 }

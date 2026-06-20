@@ -1,18 +1,23 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
 using volontiamo.api.Auth;
 using volontiamo.api.Events;
+using volontiamo.api.Persistence;
+using volontiamo.api.Users;
 using volontiamo.domain;
 
 namespace volontiamo.api.tests.L1;
 
 public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
 {
+    private readonly PostgresWebApplicationFactory _factory;
     private readonly HttpClient _client;
 
     public EventsEndpointTests(PostgresWebApplicationFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient();
     }
 
@@ -186,6 +191,9 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         await AuthenticateAsSeedUserAsync();
         var token = Guid.NewGuid().ToString("N");
         var eventItem = await CreateEventAsync(ValidCreateRequest(name: $"{token} aggregati", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+
+        var acceptedVolunteer = await CreateUserCredentialsAsync($"vol-{Guid.NewGuid():N}@volontiamo.local", "Volontiamo123!", UserType.Volontario);
+        await AuthenticateAsAsync(acceptedVolunteer.Email, acceptedVolunteer.Password);
         await SetParticipationAsync(eventItem.Id, EventParticipationStatus.Accepted);
 
         var secondUserEmail = $"vol-{Guid.NewGuid():N}@volontiamo.local";
@@ -212,6 +220,9 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         await AuthenticateAsSeedUserAsync();
         var token = Guid.NewGuid().ToString("N");
         var eventItem = await CreateEventAsync(ValidCreateRequest(name: $"{token} dettaglio", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+
+        var acceptedVolunteer = await CreateUserCredentialsAsync($"vol-{Guid.NewGuid():N}@volontiamo.local", "Volontiamo123!", UserType.Volontario);
+        await AuthenticateAsAsync(acceptedVolunteer.Email, acceptedVolunteer.Password);
         await SetParticipationAsync(eventItem.Id, EventParticipationStatus.Accepted);
 
         var secondUserEmail = $"vol-{Guid.NewGuid():N}@volontiamo.local";
@@ -230,7 +241,42 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         Assert.Equal(eventItem.Id, detail!.Id);
         Assert.Equal(1, detail.AcceptedParticipantsCount);
         var participant = Assert.Single(detail.AcceptedParticipants);
-        Assert.Equal(PostgresWebApplicationFactory.SeedEmail, participant.Email);
+        Assert.Equal(acceptedVolunteer.Email, participant.Email);
+    }
+
+    [Fact]
+    public async Task ListAndDetail_ExcludeAcceptedLiltParticipantsFromLegacyDirtyData()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var token = Guid.NewGuid().ToString("N");
+        var eventItem = await CreateEventAsync(ValidCreateRequest(name: $"{token} dirty", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+        var volunteer = await CreateUserCredentialsAsync($"vol-{Guid.NewGuid():N}@volontiamo.local", "Volontiamo123!", UserType.Volontario);
+        var liltUser = await CreateUserCredentialsAsync($"lilt-{Guid.NewGuid():N}@volontiamo.local", "Volontiamo123!", UserType.Lilt);
+
+        await AuthenticateAsAsync(volunteer.Email, volunteer.Password);
+        await SetParticipationAsync(eventItem.Id, EventParticipationStatus.Accepted);
+
+        await InsertParticipationAsync(eventItem.Id, liltUser.User.Id, EventParticipationStatus.Accepted);
+
+        await AuthenticateAsSeedUserAsync();
+        var listResponse = await _client.GetAsync($"/api/v1/events?name={token}&status=active&page=1&pageSize=10");
+        var detailResponse = await _client.GetAsync($"/api/v1/events/{eventItem.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+
+        var paged = await listResponse.Content.ReadFromJsonAsync<PagedResponse<EventResponse>>();
+        var detail = await detailResponse.Content.ReadFromJsonAsync<EventDetailResponse>();
+
+        Assert.NotNull(paged);
+        Assert.NotNull(detail);
+
+        var listed = Assert.Single(paged!.Items);
+        Assert.Equal(1, listed.AcceptedParticipantsCount);
+        Assert.Equal(1, detail!.AcceptedParticipantsCount);
+        var participant = Assert.Single(detail.AcceptedParticipants);
+        Assert.Equal(volunteer.User.Id, participant.UserId);
+        Assert.DoesNotContain(detail.AcceptedParticipants, item => item.UserId == liltUser.User.Id);
     }
 
     [Fact]
@@ -253,6 +299,9 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         await CreateEventAsync(ValidCreateRequest(name: $"{token} draft", status: EventStatus.Draft, startAtUtc: DateTime.UtcNow.AddDays(12)));
         await CreateEventAsync(ValidCreateRequest(name: $"{token} concluded", status: EventStatus.Concluded, startAtUtc: DateTime.UtcNow.AddDays(13)));
         await CreateEventAsync(ValidCreateRequest(name: $"{token} started", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddHours(-2)));
+
+        var volunteer = await CreateUserCredentialsAsync($"vol-{Guid.NewGuid():N}@volontiamo.local", "Volontiamo123!", UserType.Volontario);
+        await AuthenticateAsAsync(volunteer.Email, volunteer.Password);
         await SetParticipationAsync(refused.Id, EventParticipationStatus.Refused);
 
         var response = await _client.GetAsync($"/api/v1/events/my?page=1&pageSize=100");
@@ -273,6 +322,9 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         var token = Guid.NewGuid().ToString("N");
         var refused = await CreateEventAsync(ValidCreateRequest(name: $"{token} refused", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
         var accepted = await CreateEventAsync(ValidCreateRequest(name: $"{token} accepted", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(11)));
+
+        var volunteer = await CreateUserCredentialsAsync($"vol-{Guid.NewGuid():N}@volontiamo.local", "Volontiamo123!", UserType.Volontario);
+        await AuthenticateAsAsync(volunteer.Email, volunteer.Password);
         await SetParticipationAsync(refused.Id, EventParticipationStatus.Refused);
         await SetParticipationAsync(accepted.Id, EventParticipationStatus.Accepted);
 
@@ -293,6 +345,9 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         await AuthenticateAsSeedUserAsync();
         var eventItem = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
 
+        var volunteer = await CreateUserCredentialsAsync($"vol-{Guid.NewGuid():N}@volontiamo.local", "Volontiamo123!", UserType.Volontario);
+        await AuthenticateAsAsync(volunteer.Email, volunteer.Password);
+
         var acceptedResponse = await SetParticipationAsync(eventItem.Id, EventParticipationStatus.Accepted);
         var refusedResponse = await SetParticipationAsync(eventItem.Id, EventParticipationStatus.Refused);
 
@@ -309,6 +364,9 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         var concluded = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Concluded, startAtUtc: DateTime.UtcNow.AddDays(11)));
         var alreadyStarted = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddHours(-2)));
 
+        var volunteer = await CreateUserCredentialsAsync($"vol-{Guid.NewGuid():N}@volontiamo.local", "Volontiamo123!", UserType.Volontario);
+        await AuthenticateAsAsync(volunteer.Email, volunteer.Password);
+
         var draftResponse = await _client.PutAsJsonAsync($"/api/v1/events/{draft.Id}/participation", new { status = "Accepted" });
         var concludedResponse = await _client.PutAsJsonAsync($"/api/v1/events/{concluded.Id}/participation", new { status = "Accepted" });
         var alreadyStartedResponse = await _client.PutAsJsonAsync($"/api/v1/events/{alreadyStarted.Id}/participation", new { status = "Accepted" });
@@ -324,8 +382,12 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         await AuthenticateAsSeedUserAsync();
         var token = Guid.NewGuid().ToString("N");
         var eventItem = await CreateEventAsync(ValidCreateRequest(name: $"{token} backoffice", status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+
+        var volunteer = await CreateUserCredentialsAsync($"vol-{Guid.NewGuid():N}@volontiamo.local", "Volontiamo123!", UserType.Volontario);
+        await AuthenticateAsAsync(volunteer.Email, volunteer.Password);
         await SetParticipationAsync(eventItem.Id, EventParticipationStatus.Refused);
 
+        await AuthenticateAsSeedUserAsync();
         var response = await _client.GetAsync($"/api/v1/events?name={token}&status=active");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -428,6 +490,27 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
     }
 
     [Fact]
+    public async Task MyEvents_ForLiltUser_ReturnsForbidden()
+    {
+        await AuthenticateAsSeedUserAsync();
+
+        var response = await _client.GetAsync("/api/v1/events/my?page=1&pageSize=10");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Participation_ForLiltUser_ReturnsForbidden()
+    {
+        await AuthenticateAsSeedUserAsync();
+        var eventItem = await CreateEventAsync(ValidCreateRequest(status: EventStatus.Active, startAtUtc: DateTime.UtcNow.AddDays(10)));
+
+        var response = await _client.PutAsJsonAsync($"/api/v1/events/{eventItem.Id}/participation", new { status = "Accepted" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task RemoveParticipant_WhenNotAccepted_ReturnsNotFound()
     {
         await AuthenticateAsSeedUserAsync();
@@ -446,7 +529,7 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
         return eventItem!;
     }
 
-    private async Task<UserResponse> CreateUserAsync(string email, string password)
+    private async Task<UserResponse> CreateUserAsync(string email, string password, UserType userType = UserType.Volontario)
     {
         var request = new CreateUserRequest(
             FirstName: "Vol",
@@ -458,13 +541,27 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
             EnrollmentDate: DateOnly.FromDateTime(DateTime.UtcNow),
             EndDate: null,
             IsActive: true,
-            UserType: UserType.Volontario,
-            Occupation: "Volontario");
+            UserType: userType,
+            Occupation: userType == UserType.Volontario ? "Volontario" : "Operatore LILT");
 
         var response = await _client.PostAsJsonAsync("/api/v1/users", request);
         response.EnsureSuccessStatusCode();
         var user = await response.Content.ReadFromJsonAsync<UserResponse>();
         return user!;
+    }
+
+    private async Task<TestUserCredentials> CreateUserCredentialsAsync(string email, string password, UserType userType = UserType.Volontario)
+    {
+        var user = await CreateUserAsync(email, password, userType);
+        return new TestUserCredentials(user, password);
+    }
+
+    private async Task InsertParticipationAsync(int eventId, Guid userId, EventParticipationStatus status)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.EventParticipations.Add(EventParticipation.Create(eventId, userId, status, DateTime.UtcNow));
+        await db.SaveChangesAsync();
     }
 
     private async Task<ParticipantEventResponse> SetParticipationAsync(int eventId, EventParticipationStatus status)
@@ -492,4 +589,10 @@ public class EventsEndpointTests : IClassFixture<PostgresWebApplicationFactory>
 
     private static DateTime Utc(int year, int month, int day, int hour)
         => new(year, month, day, hour, 0, 0, DateTimeKind.Utc);
+
+    private sealed record TestUserCredentials(UserResponse User, string Password)
+    {
+        public Guid Id => User.Id;
+        public string Email => User.Email;
+    }
 }
