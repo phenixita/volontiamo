@@ -54,12 +54,22 @@ public static class UserEndpoints
 
     // ⚠️ INTENZIONALMENTE VULNERABILE (SQL injection) – solo per testare GitHub Code Scanning. NON fare merge.
     private static async Task<IResult> SearchUsersByLastName(
-        [FromQuery] string lastName,
+        HttpRequest request,
         [FromServices] AppDbContext db,
         CancellationToken ct)
     {
-        var sql = "SELECT id AS \"Value\" FROM users WHERE last_name = '" + lastName + "'";
-        var ids = await db.Database.SqlQueryRaw<Guid>(sql).ToListAsync(ct);
+        string lastName = request.Query["lastName"]!;
+
+        var connection = db.Database.GetDbConnection();
+        await connection.OpenAsync(ct);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id FROM users WHERE last_name = '" + lastName + "'";
+
+        var ids = new List<Guid>();
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            ids.Add(reader.GetGuid(0));
+
         return Results.Ok(ids);
     }
 
