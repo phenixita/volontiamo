@@ -1,0 +1,7 @@
+# Sink mancanti nei modelli ufficiali di CodeQL per EF Core (>= 7).
+extensions:
+  - addsTo:
+      pack: codeql/csharp-all
+      extensible: sinkModel
+    data:
+      - ["Microsoft.EntityFrameworkCore", "RelationalDatabaseFacadeExtensions", False, "SqlQueryRaw<TResult>", "", "", "Argument[1]", "sql-injection", "manual"]

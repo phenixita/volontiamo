@@ -60,16 +60,8 @@ public static class UserEndpoints
     {
         string lastName = request.Query["lastName"]!;
 
-        var connection = db.Database.GetDbConnection();
-        await connection.OpenAsync(ct);
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT id FROM users WHERE last_name = '" + lastName + "'";
-
-        var ids = new List<Guid>();
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-            ids.Add(reader.GetGuid(0));
-
+        var sql = "SELECT id AS \"Value\" FROM users WHERE last_name = '" + lastName + "'";
+        var ids = await db.Database.SqlQueryRaw<Guid>(sql).ToListAsync(ct);
         return Results.Ok(ids);
     }
 
