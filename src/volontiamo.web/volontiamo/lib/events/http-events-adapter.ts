@@ -14,10 +14,14 @@ import type {
   UpdateEventInput,
 } from "@/lib/events/contracts";
 import { readSessionToken } from "@/lib/auth/session";
-import { isRecord, readApiBaseUrl, readHttpErrorMessage } from "@/lib/http";
+import { isGuid, isRecord, readApiBaseUrl, readHttpErrorMessage } from "@/lib/http";
 
 const EVENTS_ROUTE = "/api/v1/events";
 const REQUEST_TIMEOUT_MS = 10_000;
+
+function isValidEventId(id: number): boolean {
+  return Number.isSafeInteger(id) && id > 0;
+}
 
 function isEventStatus(value: unknown): value is EventStatus {
   return value === 0 || value === 1 || value === 2;
@@ -178,6 +182,10 @@ export async function readEventsPage(input: ReadEventsInput): Promise<EventsRead
 }
 
 export async function readEventDetail(id: number): Promise<EventDetailReadResult> {
+  if (!isValidEventId(id)) {
+    return { ok: false, kind: "http", statusCode: 400, message: "Identificativo evento non valido." };
+  }
+
   const baseUrlResult = readApiBaseUrl();
   if (!baseUrlResult.ok) {
     return { ok: false, kind: "configuration", message: baseUrlResult.message };
@@ -188,7 +196,7 @@ export async function readEventDetail(id: number): Promise<EventDetailReadResult
     return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
   }
 
-  const url = new URL(`${EVENTS_ROUTE}/${id}`, baseUrlResult.value);
+  const url = new URL(`${EVENTS_ROUTE}/${encodeURIComponent(String(id))}`, baseUrlResult.value);
 
   let response: Response;
   try {
@@ -261,6 +269,10 @@ export async function createEvent(input: CreateEventInput): Promise<EventMutatio
 }
 
 export async function deleteEvent(id: number): Promise<EventMutationResult> {
+  if (!isValidEventId(id)) {
+    return { ok: false, kind: "http", statusCode: 400, message: "Identificativo evento non valido." };
+  }
+
   const baseUrlResult = readApiBaseUrl();
   if (!baseUrlResult.ok) {
     return { ok: false, kind: "configuration", message: baseUrlResult.message };
@@ -271,7 +283,7 @@ export async function deleteEvent(id: number): Promise<EventMutationResult> {
     return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
   }
 
-  const url = new URL(`${EVENTS_ROUTE}/${id}`, baseUrlResult.value);
+  const url = new URL(`${EVENTS_ROUTE}/${encodeURIComponent(String(id))}`, baseUrlResult.value);
   let response: Response;
   try {
     response = await fetch(url.toString(), {
@@ -294,6 +306,10 @@ export async function deleteEvent(id: number): Promise<EventMutationResult> {
 }
 
 export async function updateEvent(id: number, input: UpdateEventInput): Promise<EventMutationResult> {
+  if (!isValidEventId(id)) {
+    return { ok: false, kind: "http", statusCode: 400, message: "Identificativo evento non valido." };
+  }
+
   const baseUrlResult = readApiBaseUrl();
   if (!baseUrlResult.ok) {
     return { ok: false, kind: "configuration", message: baseUrlResult.message };
@@ -304,7 +320,7 @@ export async function updateEvent(id: number, input: UpdateEventInput): Promise<
     return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
   }
 
-  const url = new URL(`${EVENTS_ROUTE}/${id}`, baseUrlResult.value);
+  const url = new URL(`${EVENTS_ROUTE}/${encodeURIComponent(String(id))}`, baseUrlResult.value);
   let response: Response;
   try {
     response = await fetch(url.toString(), {
@@ -328,6 +344,10 @@ export async function updateEvent(id: number, input: UpdateEventInput): Promise<
 }
 
 export async function acceptCandidate(eventId: number, userId: string): Promise<EventMutationResult> {
+  if (!isValidEventId(eventId) || !isGuid(userId)) {
+    return { ok: false, kind: "http", statusCode: 400, message: "Identificativo evento o utente non valido." };
+  }
+
   const baseUrlResult = readApiBaseUrl();
   if (!baseUrlResult.ok) {
     return { ok: false, kind: "configuration", message: baseUrlResult.message };
@@ -338,7 +358,7 @@ export async function acceptCandidate(eventId: number, userId: string): Promise<
     return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
   }
 
-  const url = new URL(`${EVENTS_ROUTE}/${eventId}/candidates/${userId}/accept`, baseUrlResult.value);
+  const url = new URL(`${EVENTS_ROUTE}/${encodeURIComponent(String(eventId))}/candidates/${encodeURIComponent(userId)}/accept`, baseUrlResult.value);
   let response: Response;
   try {
     response = await fetch(url.toString(), {
@@ -362,6 +382,10 @@ export async function acceptCandidate(eventId: number, userId: string): Promise<
 }
 
 export async function rejectCandidate(eventId: number, userId: string): Promise<EventMutationResult> {
+  if (!isValidEventId(eventId) || !isGuid(userId)) {
+    return { ok: false, kind: "http", statusCode: 400, message: "Identificativo evento o utente non valido." };
+  }
+
   const baseUrlResult = readApiBaseUrl();
   if (!baseUrlResult.ok) {
     return { ok: false, kind: "configuration", message: baseUrlResult.message };
@@ -372,7 +396,7 @@ export async function rejectCandidate(eventId: number, userId: string): Promise<
     return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
   }
 
-  const url = new URL(`${EVENTS_ROUTE}/${eventId}/candidates/${userId}/reject`, baseUrlResult.value);
+  const url = new URL(`${EVENTS_ROUTE}/${encodeURIComponent(String(eventId))}/candidates/${encodeURIComponent(userId)}/reject`, baseUrlResult.value);
   let response: Response;
   try {
     response = await fetch(url.toString(), {
@@ -396,6 +420,10 @@ export async function rejectCandidate(eventId: number, userId: string): Promise<
 }
 
 export async function deleteParticipation(eventId: number, userId: string): Promise<EventMutationResult> {
+  if (!isValidEventId(eventId) || !isGuid(userId)) {
+    return { ok: false, kind: "http", statusCode: 400, message: "Identificativo evento o utente non valido." };
+  }
+
   const baseUrlResult = readApiBaseUrl();
   if (!baseUrlResult.ok) {
     return { ok: false, kind: "configuration", message: baseUrlResult.message };
@@ -406,7 +434,7 @@ export async function deleteParticipation(eventId: number, userId: string): Prom
     return { ok: false, kind: "http", statusCode: 401, message: "Sessione assente. Effettua il login." };
   }
 
-  const url = new URL(`${EVENTS_ROUTE}/${eventId}/participants/${userId}`, baseUrlResult.value);
+  const url = new URL(`${EVENTS_ROUTE}/${encodeURIComponent(String(eventId))}/participants/${encodeURIComponent(userId)}`, baseUrlResult.value);
   let response: Response;
   try {
     response = await fetch(url.toString(), {

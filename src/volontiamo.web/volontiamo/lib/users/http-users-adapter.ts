@@ -11,7 +11,7 @@ import type {
 } from "@/lib/users/contracts";
 import { readSessionToken } from "@/lib/auth/session";
 import type { UserType } from "@/lib/auth/contracts";
-import { isRecord, readApiBaseUrl, readHttpErrorMessage } from "@/lib/http";
+import { isGuid, isRecord, readApiBaseUrl, readHttpErrorMessage } from "@/lib/http";
 
 const USERS_ROUTE = "/api/v1/users";
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -194,6 +194,10 @@ export async function readUsersPage(input: ReadUsersInput): Promise<UsersReadRes
 }
 
 export async function readUserById(id: string): Promise<UserReadResult> {
+  if (!isGuid(id)) {
+    return { ok: false, kind: "http", statusCode: 400, message: "Identificativo utente non valido." };
+  }
+
   const baseUrlResult = readApiBaseUrl();
   if (!baseUrlResult.ok) {
     return { ok: false, kind: "configuration", message: baseUrlResult.message };
@@ -204,7 +208,7 @@ export async function readUserById(id: string): Promise<UserReadResult> {
     return tokenResult;
   }
 
-  const url = new URL(`${USERS_ROUTE}/${id}`, baseUrlResult.value);
+  const url = new URL(`${USERS_ROUTE}/${encodeURIComponent(id)}`, baseUrlResult.value);
   let response: Response;
   try {
     response = await fetch(url.toString(), {
@@ -237,7 +241,11 @@ export async function createUser(input: CreateUserInput): Promise<UserMutationRe
 }
 
 export async function updateUser(id: string, input: UpdateUserInput): Promise<UserMutationResult> {
-  return writeUser("PUT", `${USERS_ROUTE}/${id}`, input, "Aggiornamento utente");
+  if (!isGuid(id)) {
+    return { ok: false, kind: "http", statusCode: 400, message: "Identificativo utente non valido." };
+  }
+
+  return writeUser("PUT", `${USERS_ROUTE}/${encodeURIComponent(id)}`, input, "Aggiornamento utente");
 }
 
 async function writeUser(method: "POST" | "PUT", route: string, input: CreateUserInput | UpdateUserInput, label: string): Promise<UserMutationResult> {
