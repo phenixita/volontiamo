@@ -29,6 +29,10 @@ export function readApiBaseUrl(): { ok: true; value: URL } | { ok: false; messag
   }
 }
 
+export function isGuid(value: string): boolean {
+  return /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value);
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
