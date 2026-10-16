@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using volontiamo.api.Persistence;
 using volontiamo.domain;
 
 namespace volontiamo.api.Users;
@@ -14,6 +16,7 @@ public static class UserEndpoints
 
         group.MapPost("/", CreateUser);
         group.MapGet("/", ListUsers);
+        group.MapGet("/search", SearchUsersByLastName);
         group.MapGet("/{id:guid}", GetUser);
         group.MapPut("/{id:guid}", UpdateUser);
         group.MapDelete("/{id:guid}", DeleteUser);
@@ -47,6 +50,17 @@ public static class UserEndpoints
     {
         var result = await service.ListAsync(page ?? 1, pageSize ?? 10, ct);
         return Results.Ok(result);
+    }
+
+    // ⚠️ INTENZIONALMENTE VULNERABILE (SQL injection) – solo per testare GitHub Code Scanning. NON fare merge.
+    private static async Task<IResult> SearchUsersByLastName(
+        [FromQuery] string lastName,
+        [FromServices] AppDbContext db,
+        CancellationToken ct)
+    {
+        var sql = "SELECT id AS \"Value\" FROM users WHERE last_name = '" + lastName + "'";
+        var ids = await db.Database.SqlQueryRaw<Guid>(sql).ToListAsync(ct);
+        return Results.Ok(ids);
     }
 
     private static async Task<IResult> GetUser(
